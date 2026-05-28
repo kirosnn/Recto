@@ -1,17 +1,26 @@
 import Link from "next/link";
+import { createClient } from "../lib/supabase-server";
+import UserMenu from "../components/UserMenu";
 
-export default function Page() {
+export default async function Page() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
       {/* Nav */}
       <nav className="fixed top-0 inset-x-0 z-50 flex items-center justify-between px-6 h-14 border-b border-white/5 bg-zinc-950/80 backdrop-blur">
         <span className="font-bold tracking-wide text-white">Recto</span>
+        {user ? (
+          <UserMenu user={user as Parameters<typeof UserMenu>[0]["user"]} />
+        ) : (
         <Link
           href="/verso"
           className="px-4 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-sm font-medium transition-colors"
         >
           Se connecter
         </Link>
+        )}
       </nav>
 
       {/* Hero */}
