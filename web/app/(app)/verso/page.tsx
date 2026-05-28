@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { WebVersoConnection } from "../../lib/webrtc";
+import { WebVersoConnection } from "../../../lib/webrtc";
 
 type Status = "idle" | "connecting" | "connected" | "error";
 
