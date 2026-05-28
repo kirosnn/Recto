@@ -1,0 +1,11 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.local
+src-tauri/target
+src-tauri/gen
+web/.next
+web/node_modules
+web/out
