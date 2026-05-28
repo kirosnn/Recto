@@ -4,7 +4,7 @@ use tauri::Manager;
 
 #[tauri::command]
 async fn inject_input(event: input::InputEvent) -> Result<(), String> {
-    input::inject(event).map_err(|e| e.to_string())
+    input::inject(event).map_err(|e: anyhow::Error| e.to_string())
 }
 
 #[tauri::command]
