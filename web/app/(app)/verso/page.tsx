@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import { useState, useRef, useEffect } from "react";
 import { WebVersoConnection } from "../../lib/webrtc";
 

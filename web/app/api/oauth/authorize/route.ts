@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
-// Génère un code d'autorisation OAuth temporaire.
-// En production, stocker dans Supabase avec expiration courte (10 min).
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as {
@@ -17,16 +17,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 });
     }
 
-    // Valider que redirect_uri est une URL valide
     try { new URL(redirect_uri); } catch {
       return NextResponse.json({ error: "redirect_uri invalide" }, { status: 400 });
     }
 
-    // Générer un code opaque (en prod: stocker dans Supabase + lier à l'utilisateur)
+    // Vérifier que l'utilisateur est connecté
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll: () => cookieStore.getAll(),
+          setAll: (toSet) =>
+            toSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            ),
+        },
+      }
+    );
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    }
+
     const code = generateCode();
 
-    // TODO: stocker (code, client_id, redirect_uri, scope, user_id, expires_at) dans Supabase
-    // await supabase.from("oauth_codes").insert({ code, client_id, redirect_uri, scope, expires_at: ... })
+    // TODO: stocker dans Supabase oauth_codes table
+    // await supabase.from("oauth_codes").insert({ code, client_id, redirect_uri, scope, user_id: user.id, expires_at: ... })
 
     return NextResponse.json({ code });
   } catch {
