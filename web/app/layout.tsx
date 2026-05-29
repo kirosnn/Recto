@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Instrument_Serif } from "next/font/google";
 import "./globals.css";
@@ -18,6 +18,7 @@ const themeScript = `(function(){try{var t=localStorage.getItem("theme")||"dark"
 export const metadata: Metadata = {
   title: "Recto",
   description: "Partage d'écran P2P serverless — de PC à PC, sans serveur.",
+  manifest: "/manifest.webmanifest",
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
@@ -26,6 +27,21 @@ export const metadata: Metadata = {
     shortcut: "/favicon.ico",
     apple: "/icon.png",
   },
+  // Enables iOS standalone (fullscreen) launch from the home screen
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Recto",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0a0a0a",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
