@@ -3,7 +3,7 @@
 import { motion } from "motion/react";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import PreferencesDrawer from "./PreferencesDrawer";
 
 // ── Variants copiés exactement du kirosnn-portifolio ──────────
@@ -55,7 +55,11 @@ type User = {
   email?: string;
 } | null;
 
+const introDurationMs = 4100;
+
 export default function MainContent({ user }: { user: User }) {
+  const [isIntroComplete, setIsIntroComplete] = useState(false);
+
   useEffect(() => {
     const root = document.documentElement;
     const lockClass = "main-page-scroll-locked";
@@ -75,10 +79,11 @@ export default function MainContent({ user }: { user: User }) {
     window.addEventListener("scroll", keepTop, { passive: true });
 
     const timer = window.setTimeout(() => {
+      setIsIntroComplete(true);
       root.classList.remove(lockClass);
       window.removeEventListener("scroll", keepTop);
       cancelAnimationFrame(frame);
-    }, 4100);
+    }, introDurationMs);
 
     return () => {
       window.clearTimeout(timer);
@@ -182,103 +187,107 @@ export default function MainContent({ user }: { user: User }) {
         </motion.span>
       </motion.div>
 
-      {/* ── Section Recto / Verso ── */}
-      <Section id="roles" title="Deux rôles, une idée simple.">
-        <div className="main-experience-list">
-          <ExperienceRow
-            left={
-              <>
-                <span style={{ fontFamily: "var(--font-serif)", fontSize: "1.15rem", fontStyle: "italic", letterSpacing: "-0.02em" }}>Recto</span>
-                <Badge color="accent">Hôte</Badge>
-              </>
-            }
-            title="Le PC qui partage son écran"
-            desc="Recto, c'est toi. Tu ouvres l'app Windows, tu partages ce que tu veux, et tu reçois un code. Ton PC fait tourner le flux — personne d'autre n'y touche."
-            period="App Windows"
-          />
-          <ExperienceRow
-            left={
-              <>
-                <span style={{ fontFamily: "var(--font-serif)", fontSize: "1.15rem", fontStyle: "italic", letterSpacing: "-0.02em" }}>Verso</span>
-                <Badge color="neutral">Client</Badge>
-              </>
-            }
-            title="Le PC (ou navigateur) qui reçoit"
-            desc="Verso, c'est l'autre personne. Elle entre le code dans l'app ou sur ce site — et voit ton écran en direct. Elle peut même prendre le contrôle clavier et souris."
-            period="App ou web"
-          />
-          <ExperienceRow
-            left={
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.78rem", color: "#a39589", letterSpacing: "0.02em" }}>
-                Pourquoi ces noms ?
-              </span>
-            }
-            desc="Recto et Verso, c'est le recto et le verso d'une feuille. Le Recto montre, le Verso reçoit. Simple."
-            italic
-          />
-        </div>
-      </Section>
+      {isIntroComplete && (
+        <>
+          {/* ── Section Recto / Verso ── */}
+          <Section id="roles" title="Deux rôles, une idée simple.">
+            <div className="main-experience-list">
+              <ExperienceRow
+                left={
+                  <>
+                    <span style={{ fontFamily: "var(--font-serif)", fontSize: "1.15rem", fontStyle: "italic", letterSpacing: "-0.02em" }}>Recto</span>
+                    <Badge color="accent">Hôte</Badge>
+                  </>
+                }
+                title="Le PC qui partage son écran"
+                desc="Recto, c'est toi. Tu ouvres l'app Windows, tu partages ce que tu veux, et tu reçois un code. Ton PC fait tourner le flux — personne d'autre n'y touche."
+                period="App Windows"
+              />
+              <ExperienceRow
+                left={
+                  <>
+                    <span style={{ fontFamily: "var(--font-serif)", fontSize: "1.15rem", fontStyle: "italic", letterSpacing: "-0.02em" }}>Verso</span>
+                    <Badge color="neutral">Client</Badge>
+                  </>
+                }
+                title="Le PC (ou navigateur) qui reçoit"
+                desc="Verso, c'est l'autre personne. Elle entre le code dans l'app ou sur ce site — et voit ton écran en direct. Elle peut même prendre le contrôle clavier et souris."
+                period="App ou web"
+              />
+              <ExperienceRow
+                left={
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.78rem", color: "#a39589", letterSpacing: "0.02em" }}>
+                    Pourquoi ces noms ?
+                  </span>
+                }
+                desc="Recto et Verso, c'est le recto et le verso d'une feuille. Le Recto montre, le Verso reçoit. Simple."
+                italic
+              />
+            </div>
+          </Section>
 
-      {/* ── Section Comment ça marche ── */}
-      <Section id="comment" title="Aussi simple que ça.">
-        <div className="main-experience-list">
-          {[
-            { num: "01", badge: "App Windows",     title: "Tu ouvres Recto sur ton PC",        desc: "Lance l'app, clique sur partager, choisis ce que tu veux montrer. Un code apparaît." },
-            { num: "02", badge: "Expire en 15 min", title: "Tu envoies le code",                desc: "Six lettres. Par Discord, SMS, ou à voix haute. L'autre personne l'entre sur son téléphone ou navigateur." },
-            { num: "03", badge: "Navigateur ou app", title: "La connexion se fait toute seule", desc: "Pas de configuration réseau, pas de port à ouvrir. Ça marche derrière n'importe quel routeur." },
-          ].map((step) => (
-            <ExperienceRow
-              key={step.num}
-              left={
-                <>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem", fontWeight: 400, color: "#a39589" }}>{step.num}</span>
-                  <Badge color="accent">{step.badge}</Badge>
-                </>
-              }
-              title={step.title}
-              desc={step.desc}
-            />
-          ))}
-        </div>
-      </Section>
+          {/* ── Section Comment ça marche ── */}
+          <Section id="comment" title="Aussi simple que ça.">
+            <div className="main-experience-list">
+              {[
+                { num: "01", badge: "App Windows",     title: "Tu ouvres Recto sur ton PC",        desc: "Lance l'app, clique sur partager, choisis ce que tu veux montrer. Un code apparaît." },
+                { num: "02", badge: "Expire en 15 min", title: "Tu envoies le code",                desc: "Six lettres. Par Discord, SMS, ou à voix haute. L'autre personne l'entre sur son téléphone ou navigateur." },
+                { num: "03", badge: "Navigateur ou app", title: "La connexion se fait toute seule", desc: "Pas de configuration réseau, pas de port à ouvrir. Ça marche derrière n'importe quel routeur." },
+              ].map((step) => (
+                <ExperienceRow
+                  key={step.num}
+                  left={
+                    <>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem", fontWeight: 400, color: "#a39589" }}>{step.num}</span>
+                      <Badge color="accent">{step.badge}</Badge>
+                    </>
+                  }
+                  title={step.title}
+                  desc={step.desc}
+                />
+              ))}
+            </div>
+          </Section>
 
-      {/* ── Section Pourquoi Recto ── */}
-      <Section title="Pourquoi Recto.">
-        <div className="main-experience-list">
-          {[
-            { label: "Instantané",    period: "< 3 secondes",   desc: "De « j'ouvre l'app » à « tu vois mon écran » en moins de 3 secondes. Pas de salle d'attente." },
-            { label: "Privé",         period: "Chiffré E2E",    desc: "Ta vidéo ne passe jamais par nos serveurs. Elle va directement de ton PC à celui de l'autre personne." },
-            { label: "Fluide",        period: "Jusqu'à 60 FPS", desc: "Assez rapide pour du jeu vidéo, assez clair pour du code, assez fiable pour une démo client." },
-            { label: "Contrôle total",period: "Clavier & souris", desc: "La personne en Verso peut prendre la main sur ton PC — comme si elle était là, à l'autre bout du monde." },
-          ].map((row) => (
-            <ExperienceRow
-              key={row.label}
-              left={<span>{row.label}</span>}
-              desc={row.desc}
-              period={row.period}
-            />
-          ))}
-        </div>
-      </Section>
+          {/* ── Section Pourquoi Recto ── */}
+          <Section title="Pourquoi Recto.">
+            <div className="main-experience-list">
+              {[
+                { label: "Instantané",    period: "< 3 secondes",   desc: "De « j'ouvre l'app » à « tu vois mon écran » en moins de 3 secondes. Pas de salle d'attente." },
+                { label: "Privé",         period: "Chiffré E2E",    desc: "Ta vidéo ne passe jamais par nos serveurs. Elle va directement de ton PC à celui de l'autre personne." },
+                { label: "Fluide",        period: "Jusqu'à 60 FPS", desc: "Assez rapide pour du jeu vidéo, assez clair pour du code, assez fiable pour une démo client." },
+                { label: "Contrôle total",period: "Clavier & souris", desc: "La personne en Verso peut prendre la main sur ton PC — comme si elle était là, à l'autre bout du monde." },
+              ].map((row) => (
+                <ExperienceRow
+                  key={row.label}
+                  left={<span>{row.label}</span>}
+                  desc={row.desc}
+                  period={row.period}
+                />
+              ))}
+            </div>
+          </Section>
 
-      {/* ── Footer ── */}
-      <motion.footer
-        className="main-footer"
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, amount: 0.5 }}
-        variants={riseInVariants}
-      >
-        <div className="main-footer-inner">
-          <span className="main-footer-link" style={{ cursor: "default" }}>Recto © 2026</span>
-          <div style={{ display: "flex", gap: "16px" }}>
-            <Link href="/verso" className="main-footer-link">Verso →</Link>
-            <a href="https://github.com/kirosnn/Recto" target="_blank" rel="noopener noreferrer" className="main-footer-link">GitHub</a>
-          </div>
-        </div>
-      </motion.footer>
+          {/* ── Footer ── */}
+          <motion.footer
+            className="main-footer"
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.5 }}
+            variants={riseInVariants}
+          >
+            <div className="main-footer-inner">
+              <span className="main-footer-link" style={{ cursor: "default" }}>Recto © 2026</span>
+              <div style={{ display: "flex", gap: "16px" }}>
+                <Link href="/verso" className="main-footer-link">Verso →</Link>
+                <a href="https://github.com/kirosnn/Recto" target="_blank" rel="noopener noreferrer" className="main-footer-link">GitHub</a>
+              </div>
+            </div>
+          </motion.footer>
 
-      <PreferencesDrawer user={user as Parameters<typeof PreferencesDrawer>[0]["user"]} />
+          <PreferencesDrawer user={user as Parameters<typeof PreferencesDrawer>[0]["user"]} />
+        </>
+      )}
 
       <style>{`
         .recto-cta { transition: box-shadow 180ms ease, transform 180ms ease !important; }
