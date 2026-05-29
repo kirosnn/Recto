@@ -158,7 +158,16 @@ export default function MainContent({ user }: { user: User }) {
   return (
     <div className="main-page">
 
-      <header className="main-header">
+      <motion.header
+        className="main-header"
+        initial={{ opacity: 0, y: -20, filter: "blur(10px)" }}
+        animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+        transition={{
+          duration: 0.8,
+          ease: [0.16, 1, 0.3, 1],
+          delay: 0.1,
+        }}
+      >
         <Image
           src="/assets/desktop-computer.png"
           alt="Recto"
@@ -168,7 +177,7 @@ export default function MainContent({ user }: { user: User }) {
           priority
           unoptimized
         />
-      </header>
+      </motion.header>
 
       <motion.h1
         className="main-intro"
