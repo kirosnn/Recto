@@ -10,13 +10,19 @@ export default function LoginPage() {
   const handleLogin = async () => {
     setLoading(true);
     try {
-      await supabase.auth.signInWithOAuth({
+      // redirectTo = origin courant → http://localhost:5173 (dev) ou tauri://localhost (prod)
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "discord",
         options: {
-          redirectTo: "recto://auth/callback",
-          skipBrowserRedirect: false,
+          redirectTo: `${window.location.origin}/auth/callback`,
+          skipBrowserRedirect: true, // on gère la navigation nous-mêmes
         },
       });
+      if (error) throw error;
+      if (data.url) {
+        // Naviguer le WebView Tauri directement vers Discord OAuth
+        window.location.href = data.url;
+      }
     } catch {
       setLoading(false);
     }
@@ -79,7 +85,7 @@ export default function LoginPage() {
           ) : (
             <DiscordIcon size={20} />
           )}
-          {loading ? "Ouverture du navigateur…" : "Continuer avec Discord"}
+          {loading ? "Connexion…" : "Continuer avec Discord"}
         </button>
 
         <p style={{ marginTop: 14, fontSize: "0.76rem", color: "var(--tx-3)", textAlign: "center", lineHeight: 1.6 }}>

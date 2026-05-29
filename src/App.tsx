@@ -5,6 +5,7 @@ import Home from "./pages/Home";
 import RectoPage from "./pages/RectoPage";
 import VersoPage from "./pages/VersoPage";
 import LoginPage from "./pages/LoginPage";
+import AuthCallback from "./pages/AuthCallback";
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -25,6 +26,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/" element={<Protected><Home /></Protected>} />
       <Route path="/recto" element={<Protected><RectoPage /></Protected>} />
       <Route path="/verso" element={<Protected><VersoPage /></Protected>} />
