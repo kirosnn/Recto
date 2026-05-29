@@ -279,12 +279,15 @@ pub fn inject(_event: InputEvent) -> anyhow::Result<()> {
 }
 
 pub fn get_displays() -> Vec<DisplayInfo> {
-    vec![DisplayInfo {
-        id: 0,
-        width: 1920,
-        height: 1080,
-        x: 0,
-        y: 0,
-        primary: true,
-    }]
+    #[cfg(windows)]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
+        let w = unsafe { GetSystemMetrics(SM_CXSCREEN) } as u32;
+        let h = unsafe { GetSystemMetrics(SM_CYSCREEN) } as u32;
+        vec![DisplayInfo { id: 0, width: w, height: h, x: 0, y: 0, primary: true }]
+    }
+    #[cfg(not(windows))]
+    {
+        vec![DisplayInfo { id: 0, width: 1920, height: 1080, x: 0, y: 0, primary: true }]
+    }
 }
