@@ -1,6 +1,5 @@
 import { createClient } from "../../lib/supabase-server";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import UserMenu from "../../components/UserMenu";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -10,11 +9,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!user) redirect("/login");
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <nav className="flex items-center justify-between px-6 h-14 border-b border-white/5 bg-zinc-950/80 backdrop-blur shrink-0">
-        <Link href="/" className="font-bold tracking-wide text-white">
-          Recto
-        </Link>
+    <div className="flex flex-col min-h-screen bg-black">
+      <nav className="flex items-center justify-end px-6 h-14 shrink-0">
         <UserMenu user={user as Parameters<typeof UserMenu>[0]["user"]} />
       </nav>
       <div className="flex-1">{children}</div>
