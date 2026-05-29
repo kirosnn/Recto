@@ -1,0 +1,10 @@
+/src-tauri
+/node_modules
+/dist
+/dist-ssr
+/assets
+/locales
+/.git
+/web/node_modules
+/web/.next
+/web/out
