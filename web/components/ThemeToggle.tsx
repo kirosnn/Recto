@@ -7,8 +7,16 @@ export default function ThemeToggle() {
   return (
     <button
       onClick={toggle}
-      title={theme === "dark" ? "Passer en clair" : "Passer en sombre"}
-      className="w-8 h-8 flex items-center justify-center rounded-lg text-txm hover:text-tx hover:bg-surface transition-colors text-sm"
+      title={theme === "dark" ? "Thème clair" : "Thème sombre"}
+      style={{
+        width: "32px", height: "32px", borderRadius: "8px",
+        border: "1px solid var(--border)", background: "transparent",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        cursor: "pointer", color: "var(--tx-3)", fontSize: "13px",
+        transition: "background 180ms ease, color 180ms ease",
+      }}
+      onMouseEnter={e => { e.currentTarget.style.background = "var(--border)"; e.currentTarget.style.color = "var(--tx)"; }}
+      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--tx-3)"; }}
     >
       {theme === "dark" ? "☀" : "☾"}
     </button>

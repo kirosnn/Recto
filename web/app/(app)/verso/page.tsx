@@ -14,65 +14,46 @@ export default function VersoPage() {
   const conn = useRef<WebVersoConnection | null>(null);
 
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-    }
+    if (videoRef.current && stream) videoRef.current.srcObject = stream;
   }, [stream]);
 
   useEffect(() => () => conn.current?.stop(), []);
 
   const handleConnect = async () => {
     const trimmed = code.trim().toUpperCase();
-    if (trimmed.length !== 6) {
-      setError("Le code doit faire 6 caractères");
-      return;
-    }
-    setStatus("connecting");
-    setError("");
+    if (trimmed.length !== 6) { setError("Le code doit faire 6 caractères"); return; }
+    setStatus("connecting"); setError("");
 
     conn.current = new WebVersoConnection({
       onStream: (s) => setStream(s),
       onConnected: () => setStatus("connected"),
-      onDisconnected: () => {
-        setStatus("idle");
-        setStream(null);
-      },
-      onError: (e) => {
-        setError(e);
-        setStatus("error");
-      },
+      onDisconnected: () => { setStatus("idle"); setStream(null); },
+      onError: (e) => { setError(e); setStatus("error"); conn.current = null; },
     });
 
-    try {
-      await conn.current.connect(trimmed);
-    } catch (e: unknown) {
-      setError((e as Error).message || "Connexion échouée");
-      setStatus("error");
-      conn.current = null;
-    }
+    try { await conn.current.connect(trimmed); }
+    catch (e: unknown) { setError((e as Error).message || "Connexion échouée"); setStatus("error"); conn.current = null; }
   };
 
   const handleDisconnect = () => {
-    conn.current?.stop();
-    conn.current = null;
-    setStatus("idle");
-    setStream(null);
-    setCode("");
+    conn.current?.stop(); conn.current = null;
+    setStatus("idle"); setStream(null); setCode("");
   };
 
   if (status === "connected" || stream) {
     return (
-      <div className="relative w-screen h-screen bg-black">
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          className="w-full h-full object-contain"
-        />
+      <div style={{ position: "relative", width: "100%", height: "calc(100vh - 52px)", background: "#000" }}>
+        <video ref={videoRef} autoPlay playsInline style={{ width: "100%", height: "100%", objectFit: "contain" }} />
         <button
           onClick={handleDisconnect}
-          className="absolute top-4 right-4 px-3 py-1.5 rounded-lg bg-black/70 backdrop-blur
-                     border border-white/10 text-sm text-zinc-300 hover:text-white transition-all"
+          style={{
+            position: "absolute", top: "16px", right: "16px",
+            padding: "6px 14px", borderRadius: "10px",
+            background: "var(--surface)", border: "1px solid var(--border-2)",
+            backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+            color: "var(--tx)", fontSize: "0.84rem", cursor: "pointer",
+            boxShadow: "var(--shadow-sm)",
+          }}
         >
           ✕ Déconnecter
         </button>
@@ -81,53 +62,71 @@ export default function VersoPage() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center gap-8 p-8">
-      <div className="flex flex-col items-center gap-2 text-center">
-        <h1 className="text-3xl font-bold">Rejoindre un Recto</h1>
-        <p className="text-zinc-500 text-sm">
-          Entre le code à 6 caractères affiché sur l&apos;écran hôte
+    <div style={{
+      minHeight: "calc(100vh - 52px)", background: "var(--bg)",
+      display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center",
+      padding: "clamp(24px, 5vw, 48px)",
+    }}>
+      <div style={{ width: "100%", maxWidth: "340px" }}>
+        <h1 className="serif" style={{
+          fontSize: "clamp(1.8rem, 4vw, 2.4rem)",
+          letterSpacing: "-0.03em", color: "var(--tx)",
+          marginBottom: "8px", lineHeight: 1.1,
+        }}>
+          Se connecter.
+        </h1>
+        <p style={{ fontSize: "0.92rem", color: "var(--tx-2)", marginBottom: "28px", lineHeight: 1.55 }}>
+          Entre le code à 6 caractères affiché sur l&apos;écran Recto.
         </p>
-      </div>
 
-      <div className="flex flex-col items-center gap-4 w-full max-w-xs">
         <input
           type="text"
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 6))}
           onKeyDown={(e) => e.key === "Enter" && handleConnect()}
-          placeholder="XXXXXX"
+          placeholder="A B 3 X K 7"
           maxLength={6}
-          className="
-            font-mono w-full text-center text-3xl tracking-[0.5em] font-bold
-            bg-white/5 border border-white/10 rounded-xl px-6 py-4
-            focus:outline-none focus:border-brand-500/50
-            placeholder:text-zinc-700 placeholder:tracking-widest
-            transition-all uppercase text-white
-          "
-          autoFocus
           disabled={status === "connecting"}
+          style={{
+            width: "100%", height: "52px",
+            fontFamily: "var(--font-geist-mono)", fontSize: "1.4rem",
+            fontWeight: 600, letterSpacing: "0.25em", textAlign: "center",
+            background: "var(--bg-alt)", border: "1px solid var(--border-2)",
+            borderRadius: "12px", color: "var(--tx)", outline: "none",
+            marginBottom: "12px",
+            transition: "border-color 180ms ease, box-shadow 180ms ease",
+          }}
+          onFocus={e => { e.target.style.borderColor = "var(--accent)"; e.target.style.boxShadow = "0 0 0 3px var(--accent-dim)"; }}
+          onBlur={e => { e.target.style.borderColor = "var(--border-2)"; e.target.style.boxShadow = "none"; }}
+          autoFocus
         />
 
-        {error && <p className="text-red-400 text-sm">{error}</p>}
+        {error && (
+          <p style={{ fontSize: "0.82rem", color: "var(--accent)", marginBottom: "12px" }}>{error}</p>
+        )}
 
         <button
           onClick={handleConnect}
           disabled={status === "connecting" || code.trim().length < 6}
-          className="
-            w-full py-3 rounded-xl font-semibold transition-all
-            bg-brand-600 hover:bg-brand-500 disabled:opacity-40 disabled:cursor-not-allowed
-          "
+          className="btn-primary"
+          style={{ width: "100%", opacity: (status === "connecting" || code.trim().length < 6) ? 0.5 : 1 }}
         >
           {status === "connecting" ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
+            <>
+              <span style={{
+                width: "14px", height: "14px",
+                border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white",
+                borderRadius: "50%", display: "inline-block",
+                animation: "spin 0.7s linear infinite",
+              }} />
               Connexion…
-            </span>
-          ) : (
-            "Se connecter →"
-          )}
+            </>
+          ) : "Se connecter →"}
         </button>
+
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
-    </main>
+    </div>
   );
 }

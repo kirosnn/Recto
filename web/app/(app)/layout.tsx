@@ -10,12 +10,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!user) redirect("/login");
 
   return (
-    <div className="flex flex-col min-h-screen bg-bg">
-      <nav className="flex items-center justify-end gap-1 px-6 h-14 shrink-0">
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", background: "var(--bg)" }}>
+      <nav style={{
+        display: "flex", alignItems: "center", justifyContent: "flex-end",
+        gap: "6px", padding: "0 clamp(16px, 3vw, 32px)", height: "52px",
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 50,
+      }}>
         <ThemeToggle />
         <UserMenu user={user as Parameters<typeof UserMenu>[0]["user"]} />
       </nav>
-      <div className="flex-1">{children}</div>
+      <div style={{ flex: 1, paddingTop: "52px" }}>{children}</div>
     </div>
   );
 }
