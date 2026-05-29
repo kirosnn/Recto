@@ -19,6 +19,8 @@ export default function VersoPage() {
   // Defaults to 1920×1080; updated when Recto sends displayInfo over DataChannel
   const [hostSize, setHostSize] = useState({ w: 1920, h: 1080 });
   const [peer, setPeer] = useState<PeerIdentity | null>(null);
+  // Ctrl+Alt+H hides the on-video overlays for an immersive view
+  const [hideUI, setHideUI] = useState(false);
   const conn = useRef<WebVersoConnection | null>(null);
   // Our own Discord identity, sent to Recto once the input channel opens
   const selfIdentity = useRef<Identity | null>(null);
@@ -58,12 +60,18 @@ export default function VersoPage() {
 
   useEffect(() => () => conn.current?.stop(), []);
 
+  const exitFullscreen = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  };
+
   const handleConnect = useCallback(async () => {
     const trimmed = code.trim().toUpperCase();
     if (trimmed.length !== 6) {
       setError("Le code doit faire 6 caractères");
       return;
     }
+    // Requested within the click gesture so the browser allows it
+    document.documentElement.requestFullscreen?.().catch(() => {});
     setStatus("connecting");
     setError("");
 
@@ -75,11 +83,14 @@ export default function VersoPage() {
         setStream(null);
         setInputChannel(null);
         setPeer(null);
+        setHideUI(false);
+        exitFullscreen();
       },
       onError: (e) => {
         setError(e);
         setStatus("error");
         conn.current = null;
+        exitFullscreen();
       },
       onInputChannel: (ch) => setInputChannel(ch),
       onDisplayInfo: (w, h) => setHostSize({ w, h }),
@@ -103,6 +114,8 @@ export default function VersoPage() {
     setInputChannel(null);
     setPeer(null);
     setCode("");
+    setHideUI(false);
+    exitFullscreen();
   };
 
   if (status === "connected" || stream) {
@@ -120,8 +133,10 @@ export default function VersoPage() {
           inputChannel={inputChannel}
           hostWidth={hostSize.w}
           hostHeight={hostSize.h}
+          hideUI={hideUI}
+          onToggleUI={() => setHideUI((v) => !v)}
         />
-        {peer && (
+        {peer && !hideUI && (
           <PeerBadge
             peer={peer}
             label="Connecté à"
@@ -133,27 +148,29 @@ export default function VersoPage() {
             }}
           />
         )}
-        <button
-          onClick={handleDisconnect}
-          style={{
-            position: "absolute",
-            top: "16px",
-            right: "16px",
-            zIndex: 10,
-            padding: "6px 14px",
-            borderRadius: "10px",
-            background: "rgba(17,17,17,0.82)",
-            backdropFilter: "blur(12px)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            color: "#f5f1e8",
-            fontSize: "0.88rem",
-            cursor: "pointer",
-            fontFamily: "var(--font-sans)",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-          }}
-        >
-          ✕ Déconnecter
-        </button>
+        {!hideUI && (
+          <button
+            onClick={handleDisconnect}
+            style={{
+              position: "absolute",
+              top: "16px",
+              right: "16px",
+              zIndex: 10,
+              padding: "6px 14px",
+              borderRadius: "10px",
+              background: "rgba(17,17,17,0.82)",
+              backdropFilter: "blur(12px)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              color: "#f5f1e8",
+              fontSize: "0.88rem",
+              cursor: "pointer",
+              fontFamily: "var(--font-sans)",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+            }}
+          >
+            ✕ Déconnecter
+          </button>
+        )}
       </div>
     );
   }
