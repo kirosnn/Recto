@@ -1,7 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { WebVersoConnection } from "../../../lib/webrtc";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { WebVersoConnection, type PeerIdentity } from "../../../lib/webrtc";
+import { createClient } from "../../../lib/supabase-browser";
+import { identityFromUser, type Identity } from "../../../lib/identity";
+import VideoDisplay from "../../../components/VideoDisplay";
+import PeerBadge from "../../../components/PeerBadge";
 import BackButton from "../../../components/BackButton";
 
 type Status = "idle" | "connecting" | "connected" | "error";
@@ -11,48 +15,139 @@ export default function VersoPage() {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [inputChannel, setInputChannel] = useState<RTCDataChannel | null>(null);
+  // Defaults to 1920×1080; updated when Recto sends displayInfo over DataChannel
+  const [hostSize, setHostSize] = useState({ w: 1920, h: 1080 });
+  const [peer, setPeer] = useState<PeerIdentity | null>(null);
   const conn = useRef<WebVersoConnection | null>(null);
+  // Our own Discord identity, sent to Recto once the input channel opens
+  const selfIdentity = useRef<Identity | null>(null);
 
   useEffect(() => {
-    if (videoRef.current && stream) videoRef.current.srcObject = stream;
-  }, [stream]);
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      selfIdentity.current = identityFromUser(data.user);
+    });
+  }, []);
+
+  // Announce our identity to Recto as soon as the channel is open
+  useEffect(() => {
+    if (!inputChannel) return;
+    const send = () => {
+      const id = selfIdentity.current;
+      if (id && inputChannel.readyState === "open") {
+        inputChannel.send(
+          JSON.stringify({
+            type: "identity",
+            name: id.name,
+            avatar: id.avatar,
+          }),
+        );
+      }
+    };
+    // Identity travels on the unreliable input channel, so send a few times to
+    // beat early packet loss.
+    send();
+    const t1 = setTimeout(send, 400);
+    const t2 = setTimeout(send, 1200);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [inputChannel]);
 
   useEffect(() => () => conn.current?.stop(), []);
 
-  const handleConnect = async () => {
+  const handleConnect = useCallback(async () => {
     const trimmed = code.trim().toUpperCase();
-    if (trimmed.length !== 6) { setError("Le code doit faire 6 caractères"); return; }
-    setStatus("connecting"); setError("");
+    if (trimmed.length !== 6) {
+      setError("Le code doit faire 6 caractères");
+      return;
+    }
+    setStatus("connecting");
+    setError("");
 
     conn.current = new WebVersoConnection({
       onStream: (s) => setStream(s),
       onConnected: () => setStatus("connected"),
-      onDisconnected: () => { setStatus("idle"); setStream(null); },
-      onError: (e) => { setError(e); setStatus("error"); conn.current = null; },
+      onDisconnected: () => {
+        setStatus("idle");
+        setStream(null);
+        setInputChannel(null);
+        setPeer(null);
+      },
+      onError: (e) => {
+        setError(e);
+        setStatus("error");
+        conn.current = null;
+      },
+      onInputChannel: (ch) => setInputChannel(ch),
+      onDisplayInfo: (w, h) => setHostSize({ w, h }),
+      onIdentity: (id) => setPeer(id),
     });
 
-    try { await conn.current.connect(trimmed); }
-    catch (e: unknown) { setError((e as Error).message || "Connexion échouée"); setStatus("error"); conn.current = null; }
-  };
+    try {
+      await conn.current.connect(trimmed);
+    } catch (e: unknown) {
+      setError((e as Error).message || "Connexion échouée");
+      setStatus("error");
+      conn.current = null;
+    }
+  }, [code]);
 
   const handleDisconnect = () => {
-    conn.current?.stop(); conn.current = null;
-    setStatus("idle"); setStream(null); setCode("");
+    conn.current?.stop();
+    conn.current = null;
+    setStatus("idle");
+    setStream(null);
+    setInputChannel(null);
+    setPeer(null);
+    setCode("");
   };
 
   if (status === "connected" || stream) {
     return (
-      <div style={{ position: "relative", width: "100vw", height: "100vh", background: "#000" }}>
-        <video ref={videoRef} autoPlay playsInline style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+      <div
+        style={{
+          position: "relative",
+          width: "100vw",
+          height: "100vh",
+          background: "#000",
+        }}
+      >
+        <VideoDisplay
+          stream={stream}
+          inputChannel={inputChannel}
+          hostWidth={hostSize.w}
+          hostHeight={hostSize.h}
+        />
+        {peer && (
+          <PeerBadge
+            peer={peer}
+            label="Connecté à"
+            style={{
+              position: "absolute",
+              top: "16px",
+              left: "16px",
+              zIndex: 10,
+            }}
+          />
+        )}
         <button
           onClick={handleDisconnect}
           style={{
-            position: "absolute", top: "16px", right: "16px",
-            padding: "6px 14px", borderRadius: "10px",
-            background: "rgba(17,17,17,0.82)", backdropFilter: "blur(12px)",
+            position: "absolute",
+            top: "16px",
+            right: "16px",
+            zIndex: 10,
+            padding: "6px 14px",
+            borderRadius: "10px",
+            background: "rgba(17,17,17,0.82)",
+            backdropFilter: "blur(12px)",
             border: "1px solid rgba(255,255,255,0.1)",
-            color: "#f5f1e8", fontSize: "0.88rem", cursor: "pointer",
+            color: "#f5f1e8",
+            fontSize: "0.88rem",
+            cursor: "pointer",
             fontFamily: "var(--font-sans)",
             boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
           }}
@@ -67,22 +162,38 @@ export default function VersoPage() {
     <div
       className="main-page recto-form-page"
       style={{
-        display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center", minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "100vh",
         position: "relative",
       }}
     >
       <BackButton href="/" />
-      <div className="recto-form-inner" style={{ width: "100%", maxWidth: "360px" }}>
+      <div
+        className="recto-form-inner"
+        style={{ width: "100%", maxWidth: "360px" }}
+      >
         <h1 className="main-intro" style={{ textAlign: "left", marginTop: 0 }}>
           Se connecter.
         </h1>
 
-        <p className="main-body" style={{ textAlign: "left", marginTop: "10px", width: "100%" }}>
+        <p
+          className="main-body"
+          style={{ textAlign: "left", marginTop: "10px", width: "100%" }}
+        >
           Entre le code affiché sur l&apos;écran Recto.
         </p>
 
-        <div style={{ marginTop: "24px", display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div
+          style={{
+            marginTop: "24px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+          }}
+        >
           {/* Code input — font-size 16px minimum évite le zoom iOS */}
           <input
             type="text"
@@ -90,7 +201,10 @@ export default function VersoPage() {
             autoCapitalize="characters"
             autoCorrect="off"
             value={code}
-            onChange={(e) => { setCode(e.target.value.toUpperCase().slice(0, 6)); setError(""); }}
+            onChange={(e) => {
+              setCode(e.target.value.toUpperCase().slice(0, 6));
+              setError("");
+            }}
             onKeyDown={(e) => e.key === "Enter" && handleConnect()}
             placeholder="AB3XK7"
             maxLength={6}
@@ -99,23 +213,49 @@ export default function VersoPage() {
           />
 
           {error && (
-            <p style={{ fontSize: "0.85rem", color: "#c4623e", letterSpacing: "-0.01em", marginTop: "-2px" }}>{error}</p>
+            <p
+              style={{
+                fontSize: "0.85rem",
+                color: "#c4623e",
+                letterSpacing: "-0.01em",
+                marginTop: "-2px",
+              }}
+            >
+              {error}
+            </p>
           )}
 
           <button
             onClick={handleConnect}
             disabled={status === "connecting" || code.trim().length < 6}
             className="main-button main-button-primary is-accent"
-            style={{ width: "100%", minHeight: "50px", opacity: (status === "connecting" || code.trim().length < 6) ? 0.5 : 1 }}
+            style={{
+              width: "100%",
+              minHeight: "50px",
+              opacity:
+                status === "connecting" || code.trim().length < 6 ? 0.5 : 1,
+            }}
           >
             {status === "connecting" ? (
               <>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 0.8s linear infinite" }}>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ animation: "spin 0.8s linear infinite" }}
+                >
                   <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                 </svg>
                 Connexion…
               </>
-            ) : "Se connecter →"}
+            ) : (
+              "Se connecter"
+            )}
           </button>
         </div>
 
