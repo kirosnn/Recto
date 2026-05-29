@@ -38,8 +38,21 @@ pub fn inject(event: InputEvent) -> anyhow::Result<()> {
     unsafe {
         match event {
             InputEvent::MouseMove { x, y, width, height } => {
-                let abs_x = ((x / width) * 65535.0) as i32;
-                let abs_y = ((y / height) * 65535.0) as i32;
+                // Verso sends cursor position in shared-screen pixels (0..width, 0..height).
+                // Recto shares its primary monitor, whose top-left is the virtual-desktop
+                // origin (0,0). With MOUSEEVENTF_VIRTUALDESK the 0..65535 absolute range
+                // spans the *entire* virtual desktop, so on a multi-monitor setup we must
+                // map the shared-screen fraction onto the primary's rectangle within that
+                // virtual space — otherwise the cursor lands on the wrong monitor.
+                let (v_left, v_top, v_w, v_h, prim_w, prim_h) = virtual_and_primary();
+                let fx = if width > 0.0 { x / width } else { 0.0 };
+                let fy = if height > 0.0 { y / height } else { 0.0 };
+                let px = fx * prim_w as f64; // primary origin is (0,0)
+                let py = fy * prim_h as f64;
+                let denom_x = (v_w - 1).max(1) as f64;
+                let denom_y = (v_h - 1).max(1) as f64;
+                let abs_x = (((px - v_left as f64) * 65535.0) / denom_x) as i32;
+                let abs_y = (((py - v_top as f64) * 65535.0) / denom_y) as i32;
                 let input = INPUT {
                     r#type: INPUT_MOUSE,
                     Anonymous: INPUT_0 {
@@ -278,13 +291,84 @@ pub fn inject(_event: InputEvent) -> anyhow::Result<()> {
     Ok(())
 }
 
+// Returns (virtual_left, virtual_top, virtual_width, virtual_height, primary_w, primary_h).
+// The primary monitor's top-left is, by Windows definition, the virtual origin (0,0).
+#[cfg(windows)]
+fn virtual_and_primary() -> (i32, i32, i32, i32, i32, i32) {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetSystemMetrics, SM_CXSCREEN, SM_CXVIRTUALSCREEN, SM_CYSCREEN, SM_CYVIRTUALSCREEN,
+        SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
+    };
+    unsafe {
+        let v_left = GetSystemMetrics(SM_XVIRTUALSCREEN);
+        let v_top = GetSystemMetrics(SM_YVIRTUALSCREEN);
+        let v_w = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+        let v_h = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+        let prim_w = GetSystemMetrics(SM_CXSCREEN);
+        let prim_h = GetSystemMetrics(SM_CYSCREEN);
+        (v_left, v_top, v_w, v_h, prim_w, prim_h)
+    }
+}
+
 pub fn get_displays() -> Vec<DisplayInfo> {
     #[cfg(windows)]
     {
-        use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
-        let w = unsafe { GetSystemMetrics(SM_CXSCREEN) } as u32;
-        let h = unsafe { GetSystemMetrics(SM_CYSCREEN) } as u32;
-        vec![DisplayInfo { id: 0, width: w, height: h, x: 0, y: 0, primary: true }]
+        use windows::Win32::Foundation::{BOOL, LPARAM, RECT, TRUE};
+        use windows::Win32::Graphics::Gdi::{
+            EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFO,
+        };
+        // MONITORINFOF_PRIMARY isn't re-exported in this windows-rs version; it's a
+        // stable Win32 constant (0x1).
+        const MONITORINFOF_PRIMARY: u32 = 1;
+
+        unsafe extern "system" fn enum_proc(
+            monitor: HMONITOR,
+            _hdc: HDC,
+            _rect: *mut RECT,
+            data: LPARAM,
+        ) -> BOOL {
+            let displays = &mut *(data.0 as *mut Vec<DisplayInfo>);
+            let mut info = MONITORINFO {
+                cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+                ..Default::default()
+            };
+            if GetMonitorInfoW(monitor, &mut info).as_bool() {
+                let r = info.rcMonitor;
+                displays.push(DisplayInfo {
+                    id: displays.len() as u32,
+                    width: (r.right - r.left).max(0) as u32,
+                    height: (r.bottom - r.top).max(0) as u32,
+                    x: r.left,
+                    y: r.top,
+                    primary: (info.dwFlags & MONITORINFOF_PRIMARY) != 0,
+                });
+            }
+            TRUE
+        }
+
+        let mut displays: Vec<DisplayInfo> = Vec::new();
+        unsafe {
+            let _ = EnumDisplayMonitors(
+                HDC::default(),
+                None,
+                Some(enum_proc),
+                LPARAM(&mut displays as *mut _ as isize),
+            );
+        }
+
+        // Fallback to the primary screen if enumeration yields nothing.
+        if displays.is_empty() {
+            let (_, _, _, _, w, h) = virtual_and_primary();
+            displays.push(DisplayInfo {
+                id: 0,
+                width: w as u32,
+                height: h as u32,
+                x: 0,
+                y: 0,
+                primary: true,
+            });
+        }
+        displays
     }
     #[cfg(not(windows))]
     {
