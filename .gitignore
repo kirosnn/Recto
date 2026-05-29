@@ -9,3 +9,5 @@ src-tauri/gen
 web/.next
 web/node_modules
 web/out
+
+.vercel
