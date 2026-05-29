@@ -9,6 +9,11 @@ export type SessionStatus = "idle" | "selecting" | "waiting" | "connected" | "er
 
 export type PeerIdentity = { name: string; avatar: string | null };
 
+// Debug snapshot of the last input event injected on the host. Stored in a ref
+// (not state) so high-frequency mouse moves don't trigger re-renders; the debug
+// panel polls it instead.
+export type InputDebug = { summary: string; count: number };
+
 type Ctx = {
   status: SessionStatus;
   code: string;
@@ -16,10 +21,33 @@ type Ctx = {
   error: string;
   copied: boolean;
   peer: PeerIdentity | null;
+  lastInputRef: React.MutableRefObject<InputDebug>;
   start: () => Promise<void>;
   stop: () => void;
   copyCode: () => Promise<void>;
 };
+
+// One-line human summary of an input event for the debug overlay.
+function describeInput(event: { type: string } & Record<string, unknown>): string {
+  switch (event.type) {
+    case "mouseMove":
+      return `souris ${Math.round(event.x as number)}, ${Math.round(event.y as number)}`;
+    case "mouseMoveDelta":
+      return `souris Δ ${event.dx}, ${event.dy}`;
+    case "mouseDown":
+      return `clic ${event.button} ↓`;
+    case "mouseUp":
+      return `clic ${event.button} ↑`;
+    case "mouseWheel":
+      return `molette ${Math.round(event.deltaY as number)}`;
+    case "keyDown":
+      return `touche ${event.code} ↓`;
+    case "keyUp":
+      return `touche ${event.code} ↑`;
+    default:
+      return event.type;
+  }
+}
 
 interface DisplayInfo {
   id: number;
@@ -32,6 +60,7 @@ interface DisplayInfo {
 
 const RectoSessionCtx = createContext<Ctx>({
   status: "idle", code: "", duration: 0, error: "", copied: false, peer: null,
+  lastInputRef: { current: { summary: "", count: 0 } },
   start: async () => {}, stop: () => {}, copyCode: async () => {},
 });
 
@@ -48,12 +77,14 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
 
   const conn = useRef<RectoConnection | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastInputRef = useRef<InputDebug>({ summary: "", count: 0 });
 
   const stop = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     if (code) endSession(code).catch(() => {});
     conn.current?.stop(); conn.current = null;
     setStatus("idle"); setCode(""); setDuration(0); setError(""); setPeer(null);
+    lastInputRef.current = { summary: "", count: 0 };
   }, [code]);
 
   const start = useCallback(async () => {
@@ -118,6 +149,10 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
               setPeer({ name: event.name, avatar: event.avatar ?? null });
               return;
             }
+            lastInputRef.current = {
+              summary: describeInput(event),
+              count: lastInputRef.current.count + 1,
+            };
             await invoke("inject_input", { event });
           } catch (err) {
             console.error("[Recto] inject_input failed:", err, e.data);
@@ -140,7 +175,7 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
   }, [code]);
 
   return (
-    <RectoSessionCtx.Provider value={{ status, code, duration, error, copied, peer, start, stop, copyCode }}>
+    <RectoSessionCtx.Provider value={{ status, code, duration, error, copied, peer, lastInputRef, start, stop, copyCode }}>
       {children}
     </RectoSessionCtx.Provider>
   );
