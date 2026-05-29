@@ -499,39 +499,103 @@ html[data-theme="dark"] .main-preferences-username { color: #f5f1e8; }
 html[data-theme="dark"] .main-preferences-email { color: #8f8f8f; }
 
 /* ═══════════════════════════════════════════════════════════
-   RESPONSIVE
+   RESPONSIVE MOBILE
    ═══════════════════════════════════════════════════════════ */
 
+/* Prevent iOS auto-zoom on input focus */
+input, select, textarea { font-size: 16px; }
+
 @media (max-width: 768px) {
-    .main-page { padding: 20px 18px 28px; }
-    .main-intro { margin-top: 16px; font-size: clamp(1.15rem, 5.5vw, 1.8rem); }
-    .main-body { margin-top: 16px; width: 100%; font-size: 0.98rem; text-align: left; }
-    .main-actions { margin-top: 22px; width: 100%; }
-    .main-button { min-height: 46px; }
-    .main-meta { margin-top: 16px; }
-    .main-collaboration { margin-top: 4rem; }
-    .main-experience-row { grid-template-columns: 1fr; gap: 14px; padding: 1rem 0.2rem 1rem 0; }
-    .main-experience-content { grid-template-columns: 1fr; gap: 10px; }
-    .main-preferences-drawer { top: auto; right: 16px; bottom: 16px; transform: none; align-items: flex-end; }
+    .main-page { padding: 24px 18px 48px; }
+    .main-header { margin-top: clamp(1.5rem, 6vw, 3rem); }
+    .main-logo { width: clamp(52px, 11vw, 68px); }
+
+    .main-intro {
+        margin-top: 16px;
+        font-size: clamp(1.35rem, 6.5vw, 2rem);
+        line-height: 1.06;
+        letter-spacing: -0.035em;
+    }
+
+    .main-body {
+        margin-top: 14px;
+        width: 100%;
+        font-size: 1rem;
+        line-height: 1.55;
+        text-align: left;
+        color: #7e736c;
+    }
+
+    .main-actions { margin-top: 22px; width: 100%; flex-direction: column; align-items: stretch; gap: 10px; }
+    .main-button  { min-height: 50px; width: 100%; font-size: 1rem; border-radius: 14px; }
+    .main-button-secondary { background: rgba(18, 18, 18, 0.04); }
+
+    .main-meta { margin-top: 20px; }
+    .main-meta-chip { font-size: 0.92rem; gap: 8px; }
+
+    .main-collaboration { margin-top: 3.5rem; }
+    .main-collaboration-title {
+        font-size: clamp(1.7rem, 6.5vw, 2.4rem);
+        letter-spacing: -0.035em;
+        text-align: left;
+    }
+
+    .main-experience-list { margin-top: 1.4rem; }
+    .main-experience-row {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        padding: 1rem 0;
+    }
+    .main-experience-company { gap: 8px; font-size: 1rem; }
+    .main-experience-content { grid-template-columns: 1fr; gap: 6px; }
+    .main-experience-main h2 { font-size: 1rem; }
+    .main-experience-main p  { font-size: 0.93rem; line-height: 1.6; }
+    .main-experience-period  { font-size: 0.88rem; }
+
+    .main-footer { margin-top: 3rem; }
+    .main-footer-inner { flex-direction: column; align-items: flex-start; gap: 12px; }
+
+    /* Drawer: bottom-right floating button on mobile */
+    .main-preferences-drawer { top: auto; right: 16px; bottom: 20px; transform: none; align-items: flex-end; }
     .main-preferences-drawer.is-open { left: 16px; }
-    .main-preferences-panel { order: -1; margin-right: 10px; border: 1px solid transparent; border-radius: 16px; max-height: min(70vh, 520px); overflow-y: auto; }
-    .main-preferences-drawer.is-open .main-preferences-panel { width: min(100vw - 74px, 360px); padding: 16px; border-color: rgba(18, 18, 18, 0.08); }
-    .main-preferences-toggle { width: 48px; height: 48px; border: 1px solid rgba(18, 18, 18, 0.08); border-radius: 14px; }
+    .main-preferences-panel {
+        order: -1; margin-right: 10px;
+        border: 1px solid transparent; border-radius: 16px;
+        max-height: min(70vh, 520px); overflow-y: auto;
+    }
+    .main-preferences-drawer.is-open .main-preferences-panel {
+        width: min(calc(100vw - 76px), 340px);
+        padding: 16px;
+        border-color: rgba(18, 18, 18, 0.09);
+    }
+    .main-preferences-toggle { width: 48px; height: 48px; border: 1px solid rgba(18, 18, 18, 0.09); border-radius: 14px; }
+
+    /* Recto page-as-form (login / verso) */
+    .recto-form-page { padding: 28px 18px 48px !important; justify-content: flex-start !important; padding-top: clamp(60px, 14vw, 100px) !important; }
+    .recto-form-inner { max-width: 100% !important; }
 }
 
 @media (max-width: 560px) {
-    .main-page { padding: 16px 14px 24px; }
-    .main-actions { flex-direction: column; align-items: stretch; gap: 10px; }
-    .main-button { width: 100%; }
-    .main-collaboration { margin-top: 3.5rem; }
-    .main-preferences-drawer { right: 12px; bottom: 12px; }
+    .main-page { padding: 20px 14px 40px; }
+    .main-collaboration { margin-top: 3rem; }
+    .main-experience-row { padding: 0.85rem 0; }
+    .main-preferences-drawer { right: 12px; bottom: 16px; }
     .main-preferences-drawer.is-open { left: 12px; }
-    .main-preferences-drawer.is-open .main-preferences-panel { width: calc(100vw - 76px); max-width: 320px; padding: 14px; }
+    .main-preferences-drawer.is-open .main-preferences-panel { width: calc(100vw - 76px); max-width: 300px; padding: 14px; }
 }
 
 @media (max-width: 400px) {
     .main-page { padding-inline: 12px; }
-    .main-preferences-drawer { right: 10px; bottom: 10px; }
+    .main-collaboration-title { font-size: 1.55rem; }
+    .main-preferences-drawer { right: 10px; bottom: 14px; }
     .main-preferences-drawer.is-open { left: 10px; }
     .main-preferences-drawer.is-open .main-preferences-panel { width: calc(100vw - 68px); }
+}
+
+/* Dark theme mobile fixes */
+@media (max-width: 768px) {
+    html[data-theme="dark"] .main-body { color: #8f8f8f; }
+    html[data-theme="dark"] .main-button-secondary { background: rgba(255, 255, 255, 0.05); }
+    html[data-theme="dark"] .main-preferences-drawer.is-open .main-preferences-panel { border-color: rgba(255, 255, 255, 0.09); }
+    html[data-theme="dark"] .main-preferences-toggle { border-color: rgba(255, 255, 255, 0.1); }
 }

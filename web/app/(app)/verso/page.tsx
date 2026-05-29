@@ -63,51 +63,47 @@ export default function VersoPage() {
   }
 
   return (
-    <div className="main-page" style={{
-      display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center", minHeight: "100vh",
-    }}>
-      <div style={{ width: "100%", maxWidth: "380px" }}>
+    <div
+      className="main-page recto-form-page"
+      style={{
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", minHeight: "100vh",
+      }}
+    >
+      <div className="recto-form-inner" style={{ width: "100%", maxWidth: "360px" }}>
         <h1 className="main-intro" style={{ textAlign: "left", marginTop: 0 }}>
           Se connecter.
         </h1>
 
-        <p className="main-body" style={{ textAlign: "left", marginTop: "12px", width: "100%" }}>
-          Entre le code à 6 caractères affiché sur l&apos;écran Recto.
+        <p className="main-body" style={{ textAlign: "left", marginTop: "10px", width: "100%" }}>
+          Entre le code affiché sur l&apos;écran Recto.
         </p>
 
-        <div style={{ marginTop: "28px", display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div style={{ marginTop: "24px", display: "flex", flexDirection: "column", gap: "10px" }}>
+          {/* Code input — font-size 16px minimum évite le zoom iOS */}
           <input
             type="text"
+            inputMode="text"
+            autoCapitalize="characters"
+            autoCorrect="off"
             value={code}
             onChange={(e) => { setCode(e.target.value.toUpperCase().slice(0, 6)); setError(""); }}
             onKeyDown={(e) => e.key === "Enter" && handleConnect()}
             placeholder="AB3XK7"
             maxLength={6}
             disabled={status === "connecting"}
-            autoFocus
-            style={{
-              width: "100%", height: "52px",
-              fontFamily: "var(--font-mono)", fontSize: "1.6rem",
-              fontWeight: 600, letterSpacing: "0.3em", textAlign: "center",
-              background: "rgba(18,18,18,0.04)", color: "#121212",
-              border: "1px solid rgba(18,18,18,0.14)",
-              borderRadius: "12px", outline: "none",
-              transition: "border-color 180ms ease, box-shadow 180ms ease",
-            }}
-            onFocus={(e) => { e.target.style.borderColor = "#d97757"; e.target.style.boxShadow = "0 0 0 3px rgba(217,119,87,0.12)"; }}
-            onBlur={(e) => { e.target.style.borderColor = "rgba(18,18,18,0.14)"; e.target.style.boxShadow = "none"; }}
+            className="verso-code-input"
           />
 
           {error && (
-            <p style={{ fontSize: "0.85rem", color: "#c4623e", letterSpacing: "-0.01em" }}>{error}</p>
+            <p style={{ fontSize: "0.85rem", color: "#c4623e", letterSpacing: "-0.01em", marginTop: "-2px" }}>{error}</p>
           )}
 
           <button
             onClick={handleConnect}
             disabled={status === "connecting" || code.trim().length < 6}
             className="main-button main-button-primary is-accent"
-            style={{ width: "100%", minHeight: "46px", opacity: (status === "connecting" || code.trim().length < 6) ? 0.5 : 1 }}
+            style={{ width: "100%", minHeight: "50px", opacity: (status === "connecting" || code.trim().length < 6) ? 0.5 : 1 }}
           >
             {status === "connecting" ? (
               <>
@@ -122,10 +118,36 @@ export default function VersoPage() {
 
         <style>{`
           @keyframes spin { to { transform: rotate(360deg); } }
-          html[data-theme="dark"] input {
-            background: rgba(255,255,255,0.04) !important;
-            color: #f5f1e8 !important;
-            border-color: rgba(255,255,255,0.12) !important;
+
+          .verso-code-input {
+            width: 100%;
+            height: 64px;
+            font-family: var(--font-mono);
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: 0.28em;
+            text-align: center;
+            background: rgba(18,18,18,0.04);
+            color: #121212;
+            border: 1px solid rgba(18,18,18,0.14);
+            border-radius: 14px;
+            outline: none;
+            transition: border-color 180ms ease, box-shadow 180ms ease;
+            -webkit-appearance: none;
+          }
+          .verso-code-input::placeholder { color: rgba(18,18,18,0.2); letter-spacing: 0.28em; }
+          .verso-code-input:focus { border-color: #d97757; box-shadow: 0 0 0 3px rgba(217,119,87,0.12); }
+          .verso-code-input:disabled { opacity: 0.5; }
+
+          html[data-theme="dark"] .verso-code-input {
+            background: rgba(255,255,255,0.04);
+            color: #f5f1e8;
+            border-color: rgba(255,255,255,0.12);
+          }
+          html[data-theme="dark"] .verso-code-input::placeholder { color: rgba(255,255,255,0.18); }
+
+          @media (max-width: 768px) {
+            .verso-code-input { height: 72px; font-size: 2.2rem; border-radius: 16px; }
           }
         `}</style>
       </div>

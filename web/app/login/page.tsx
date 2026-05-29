@@ -14,8 +14,8 @@ export default async function LoginPage({
   if (user) redirect(next ?? "/verso");
 
   return (
-    <div className="main-page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
-      <div style={{ width: "100%", maxWidth: "380px" }}>
+    <div className="main-page recto-form-page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+      <div className="recto-form-inner" style={{ width: "100%", maxWidth: "360px" }}>
         <h1 className="main-intro" style={{ textAlign: "left", marginTop: 0 }}>
           Bienvenue.
         </h1>
