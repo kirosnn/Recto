@@ -45,10 +45,9 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
     setError("");
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: "monitor", frameRate: 60, cursor: "always" } as MediaTrackConstraints,
+        video: { frameRate: 60, cursor: "always" } as MediaTrackConstraints,
         audio: true,
-        selfBrowserSurface: "exclude",
-      } as DisplayMediaStreamOptions);
+      });
 
       stream.getVideoTracks()[0].onended = () => stop();
 

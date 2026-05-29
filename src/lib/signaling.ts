@@ -33,6 +33,17 @@ export async function fetchSession(code: string): Promise<Session> {
   return data as Session;
 }
 
+export async function fetchSessionAnswer(
+  sessionId: string
+): Promise<RTCSessionDescriptionInit | null> {
+  const { data } = await supabase
+    .from("sessions")
+    .select("answer")
+    .eq("id", sessionId)
+    .maybeSingle();
+  return (data?.answer as RTCSessionDescriptionInit) ?? null;
+}
+
 export async function submitAnswer(
   code: string,
   answer: RTCSessionDescriptionInit

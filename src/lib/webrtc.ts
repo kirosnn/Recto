@@ -2,6 +2,7 @@ import { RealtimeChannel } from "@supabase/supabase-js";
 import {
   createSession,
   fetchSession,
+  fetchSessionAnswer,
   submitAnswer,
   subscribeToSession,
   subscribeToIce,
@@ -63,7 +64,18 @@ export class RectoConnection {
 
     const session = await fetchSession(this.code);
 
-    // Buffer candidates until the Realtime WebSocket is connected
+    const applyAnswer = async (answer: RTCSessionDescriptionInit) => {
+      if (!this.pc.remoteDescription) {
+        await this.pc.setRemoteDescription(answer);
+      }
+    };
+
+    // Souscription session en premier — maximise la fenêtre de temps avant que Verso réponde
+    this.sessionChannel = subscribeToSession(session.id, async (update) => {
+      if (update.answer) await applyAnswer(update.answer as RTCSessionDescriptionInit);
+    });
+
+    // Buffer les candidates ICE pendant que le canal WebSocket s'initialise
     const pending: RTCIceCandidateInit[] = [];
     this.pc.onicecandidate = ({ candidate }) => {
       if (candidate) pending.push(candidate.toJSON());
@@ -80,11 +92,9 @@ export class RectoConnection {
       if (candidate && this.iceChannel) sendIceCandidate(this.iceChannel, "host", candidate.toJSON());
     };
 
-    this.sessionChannel = subscribeToSession(session.id, async (update) => {
-      if (update.answer && !this.pc.remoteDescription) {
-        await this.pc.setRemoteDescription(update.answer);
-      }
-    });
+    // Fallback : si Verso a soumis la réponse pendant le setup, on la récupère
+    const existingAnswer = await fetchSessionAnswer(session.id);
+    if (existingAnswer) await applyAnswer(existingAnswer);
   }
 
   getInputChannel(): RTCDataChannel | null {
