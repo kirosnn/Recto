@@ -40,7 +40,7 @@ a { color: inherit; }
 
 html[data-theme="light"] { color-scheme: light; }
 html[data-theme="dark"]  { color-scheme: dark; }
-html[data-theme="dark"] body { background: #111111; color: #f5f1e8; }
+html[data-theme="dark"] body { background: #202020; color: #f5f1e8; }
 
 ::-webkit-scrollbar { display: none; }
 
@@ -435,7 +435,7 @@ html[data-theme="dark"] body { background: #111111; color: #f5f1e8; }
    DARK THEME
    ═══════════════════════════════════════════════════════════ */
 
-html[data-theme="dark"] .main-page      { background: #111111; }
+html[data-theme="dark"] .main-page      { background: #202020; }
 html[data-theme="dark"] .main-intro     { color: #f5f1e8; }
 html[data-theme="dark"] .main-body      { color: #8f8f8f; }
 
@@ -465,7 +465,7 @@ html[data-theme="dark"] .main-experience-list { border-top-color: rgba(255, 255,
 html[data-theme="dark"] .main-experience-row { border-bottom-color: rgba(255, 255, 255, 0.09); }
 html[data-theme="dark"] .main-experience-row.is-clickable:hover { background: rgba(255, 255, 255, 0.06); }
 html[data-theme="dark"] .main-experience-row::before,
-html[data-theme="dark"] .main-experience-row::after { background: #111111; }
+html[data-theme="dark"] .main-experience-row::after { background: #202020; }
 html[data-theme="dark"] .main-experience-company,
 html[data-theme="dark"] .main-experience-main h2 { color: #f5f1e8; }
 html[data-theme="dark"] .main-experience-main p,

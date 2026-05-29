@@ -28,8 +28,8 @@
 
 /* ── Dark theme ─────────────────────────────────────────────── */
 html[data-theme="dark"] {
-  --bg:         #111111;
-  --bg-alt:     #161614;
+  --bg:         #202020;
+  --bg-alt:     #272725;
   --surface:    rgba(22, 22, 20, 0.88);
   --tx:         #f5f1e8;
   --tx-2:       #8f8f8f;
@@ -40,7 +40,7 @@ html[data-theme="dark"] {
   --accent-dim: rgba(217, 119, 87, 0.15);
 }
 
-html[data-theme="dark"] body { background: #111111; color: #f5f1e8; }
+html[data-theme="dark"] body { background: #202020; color: #f5f1e8; }
 
 html[data-theme="dark"] .btn-primary {
   color: #f3ede3;
@@ -54,7 +54,7 @@ html[data-theme="dark"] .btn-primary {
 }
 
 html[data-theme="dark"] .mode-card {
-  background: #161614;
+  background: #272725;
   border-color: rgba(255,255,255,0.09);
 }
 
@@ -66,7 +66,7 @@ html[data-theme="dark"] .code-input {
 html[data-theme="dark"] .code-input::placeholder { color: #555550; }
 
 html[data-theme="dark"] .code-char {
-  background: #161614;
+  background: #272725;
   border-color: rgba(255,255,255,0.12);
   color: #f5f1e8;
 }
