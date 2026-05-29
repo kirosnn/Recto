@@ -33,14 +33,10 @@ pub struct DisplayInfo {
 #[cfg(windows)]
 pub fn inject(event: InputEvent) -> anyhow::Result<()> {
     use windows::Win32::UI::Input::KeyboardAndMouse::*;
-    use windows::Win32::UI::WindowsAndMessaging::GetSystemMetrics;
-    use windows::Win32::UI::WindowsAndMessaging::{SM_CXSCREEN, SM_CYSCREEN};
 
     unsafe {
         match event {
             InputEvent::MouseMove { x, y, width, height } => {
-                let screen_w = GetSystemMetrics(SM_CXSCREEN) as f64;
-                let screen_h = GetSystemMetrics(SM_CYSCREEN) as f64;
                 let abs_x = ((x / width) * 65535.0) as i32;
                 let abs_y = ((y / height) * 65535.0) as i32;
                 let input = INPUT {
