@@ -7,6 +7,8 @@ interface VideoDisplayProps {
   inputChannel: RTCDataChannel | null;
   hostWidth: number;
   hostHeight: number;
+  hideUI: boolean;
+  onToggleUI: () => void;
 }
 
 // Web Verso equivalent of the desktop VideoDisplay: captures mouse/keyboard on
@@ -16,6 +18,8 @@ export default function VideoDisplay({
   inputChannel,
   hostWidth,
   hostHeight,
+  hideUI,
+  onToggleUI,
 }: VideoDisplayProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -140,6 +144,12 @@ export default function VideoDisplay({
       }
       onKeyDown={(e) => {
         if (e.code === "Escape") return;
+        // Ctrl+Alt+H toggles the local overlays — handled here, never forwarded
+        if (e.ctrlKey && e.altKey && e.code === "KeyH") {
+          e.preventDefault();
+          onToggleUI();
+          return;
+        }
         e.preventDefault();
         sendInput({
           type: "keyDown",
@@ -149,6 +159,7 @@ export default function VideoDisplay({
       }}
       onKeyUp={(e) => {
         if (e.code === "Escape") return;
+        if (e.ctrlKey && e.altKey && e.code === "KeyH") { e.preventDefault(); return; }
         e.preventDefault();
         sendInput({
           type: "keyUp",
@@ -165,7 +176,7 @@ export default function VideoDisplay({
         style={{ width: "100%", height: "100%", objectFit: "contain" }}
       />
 
-      {stream && !isLocked && (
+      {stream && !isLocked && !hideUI && (
         <div
           style={{
             position: "absolute",
@@ -187,7 +198,7 @@ export default function VideoDisplay({
               border: "1px solid rgba(255,255,255,0.1)",
             }}
           >
-            Cliquer pour capturer la souris · Échap pour libérer
+            Cliquer pour capturer la souris · Échap pour libérer · Ctrl+Alt+H pour masquer
           </div>
         </div>
       )}
