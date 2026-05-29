@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum InputEvent {
     MouseMove { x: f64, y: f64, width: f64, height: f64 },
+    MouseMoveDelta { dx: i32, dy: i32 },
     MouseDown { button: u8 },
     MouseUp { button: u8 },
     MouseWheel { delta_x: f64, delta_y: f64 },
@@ -47,6 +48,22 @@ pub fn inject(event: InputEvent) -> anyhow::Result<()> {
                             dy: abs_y,
                             mouseData: 0,
                             dwFlags: MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK,
+                            time: 0,
+                            dwExtraInfo: 0,
+                        },
+                    },
+                };
+                SendInput(&[input], std::mem::size_of::<INPUT>() as i32);
+            }
+            InputEvent::MouseMoveDelta { dx, dy } => {
+                let input = INPUT {
+                    r#type: INPUT_MOUSE,
+                    Anonymous: INPUT_0 {
+                        mi: MOUSEINPUT {
+                            dx,
+                            dy,
+                            mouseData: 0,
+                            dwFlags: MOUSEEVENTF_MOVE,
                             time: 0,
                             dwExtraInfo: 0,
                         },
