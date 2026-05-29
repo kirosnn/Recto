@@ -158,11 +158,11 @@ export default function VideoDisplay({
     const el = containerRef.current;
     if (!el) return;
 
-    const TAP_MS = 300;
-    const MOVE_THRESH = 8;
+    const TAP_MS = 350;
+    const TAP_SLOP = 12; // max total finger travel (px) still counted as a tap
     const g = {
-      active: false, maxTouches: 0, moved: false,
-      startTime: 0, lastX: 0, lastY: 0, lastMidY: 0,
+      active: false, maxTouches: 0,
+      startTime: 0, startX: 0, startY: 0, lastX: 0, lastY: 0, lastMidY: 0,
     };
 
     const isControl = (t: EventTarget | null) =>
@@ -173,13 +173,15 @@ export default function VideoDisplay({
       e.preventDefault();
       ensureFullscreen(); // first touch is a valid gesture for fullscreen
       const n = e.touches.length;
+      const t0 = e.touches[0];
       if (!g.active) {
-        g.active = true; g.maxTouches = n; g.moved = false; g.startTime = Date.now();
+        g.active = true; g.maxTouches = n; g.startTime = Date.now();
+        g.startX = t0.clientX; g.startY = t0.clientY;
       } else {
         g.maxTouches = Math.max(g.maxTouches, n);
       }
-      g.lastX = e.touches[0].clientX;
-      g.lastY = e.touches[0].clientY;
+      g.lastX = t0.clientX;
+      g.lastY = t0.clientY;
       if (n >= 2) g.lastMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
     };
 
@@ -191,7 +193,6 @@ export default function VideoDisplay({
         const t = e.touches[0];
         const dx = t.clientX - g.lastX;
         const dy = t.clientY - g.lastY;
-        if (Math.abs(dx) > MOVE_THRESH || Math.abs(dy) > MOVE_THRESH) g.moved = true;
         if (dx || dy) {
           sendInput({ type: "mouseMoveDelta", dx: Math.round(dx * scale), dy: Math.round(dy * scale) });
         }
@@ -201,10 +202,11 @@ export default function VideoDisplay({
         const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
         const ddy = midY - g.lastMidY;
         if (Math.abs(ddy) > 1) {
-          g.moved = true;
           sendInput({ type: "mouseWheel", deltaX: 0, deltaY: Math.round(-ddy * 2) });
         }
         g.lastMidY = midY;
+        g.lastX = e.touches[0].clientX;
+        g.lastY = e.touches[0].clientY;
       }
     };
 
@@ -217,8 +219,10 @@ export default function VideoDisplay({
         g.lastY = e.touches[0].clientY;
         return;
       }
+      // Tap = quick touch with little total travel → click at current cursor
       const dur = Date.now() - g.startTime;
-      if (!g.moved && dur < TAP_MS) {
+      const dist = Math.hypot(g.lastX - g.startX, g.lastY - g.startY);
+      if (dur < TAP_MS && dist < TAP_SLOP) {
         const btn = g.maxTouches >= 2 ? 2 : 0;
         sendInput({ type: "mouseDown", button: btn });
         sendInput({ type: "mouseUp", button: btn });
