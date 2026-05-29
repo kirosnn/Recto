@@ -1,17 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Instrument_Serif } from "next/font/google";
 import "./globals.css";
 import ThemeProvider from "../components/ThemeProvider";
 
 const geistSans = Geist({ subsets: ["latin"], variable: "--font-sans" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
-const instrumentSerif = Instrument_Serif({
-  subsets: ["latin"],
-  weight: "400",
-  style: ["normal", "italic"],
-  variable: "--font-serif",
-});
 
 const themeScript = `(function(){try{var t=localStorage.getItem("theme")||"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){document.documentElement.setAttribute("data-theme","dark");}})();`;
 
@@ -27,7 +20,6 @@ export const metadata: Metadata = {
     shortcut: "/favicon.ico",
     apple: "/icon.png",
   },
-  // Enables iOS standalone (fullscreen) launch from the home screen
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -46,7 +38,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" data-theme="dark" className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable}`}>
+    <html lang="fr" data-theme="dark" className={`${geistSans.variable} ${geistMono.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
