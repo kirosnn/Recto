@@ -1,29 +1,37 @@
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/verso";
+  const storedNext = req.cookies.get("recto-next")?.value;
+  const next = searchParams.get("next") ?? (storedNext ? decodeURIComponent(storedNext) : "/verso");
+  const redirectUrl = new URL(next, req.url);
+  const res = NextResponse.redirect(redirectUrl);
+  res.cookies.delete("recto-next");
 
   if (code) {
-    const cookieStore = await cookies();
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          getAll: () => cookieStore.getAll(),
+          getAll: () => req.cookies.getAll(),
           setAll: (toSet) =>
             toSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
+              res.cookies.set(name, value, options)
             ),
         },
       }
     );
-    await supabase.auth.exchangeCodeForSession(code);
+
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) {
+      const loginUrl = new URL("/login", req.url);
+      loginUrl.searchParams.set("next", next);
+      return NextResponse.redirect(loginUrl);
+    }
   }
 
-  return NextResponse.redirect(new URL(next, req.url));
+  return res;
 }
