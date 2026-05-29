@@ -31,9 +31,9 @@ alter table public.sessions enable row level security;
 create policy "create_session" on public.sessions
   for insert with check (true);
 
--- N'importe qui peut lire une session waiting par son code (pour rejoindre)
-create policy "read_waiting_session" on public.sessions
-  for select using (status = 'waiting' or status = 'connected');
+-- Lecture par code (le filtre de statut est géré côté client)
+create policy "read_session_by_code" on public.sessions
+  for select using (true);
 
 -- Mettre à jour la session (soumettre l'answer, changer le status)
 create policy "update_session" on public.sessions

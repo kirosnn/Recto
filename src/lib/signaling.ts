@@ -26,9 +26,10 @@ export async function fetchSession(code: string): Promise<Session> {
     .from("sessions")
     .select("*")
     .eq("code", code.toUpperCase())
-    .eq("status", "waiting")
     .single();
-  if (error || !data) throw new Error("Session introuvable ou expirée");
+  if (error || !data) throw new Error("Session introuvable — vérifie le code");
+  if (data.status === "ended") throw new Error("Cette session est terminée");
+  if (data.status === "connected") throw new Error("Cette session est déjà occupée");
   return data as Session;
 }
 
