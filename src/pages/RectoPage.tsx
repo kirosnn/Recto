@@ -1,10 +1,11 @@
 import { useNavigate } from "react-router-dom";
 import { useRectoSession } from "../context/RectoSessionContext";
 import PreferencesDrawer from "../components/PreferencesDrawer";
+import PeerBadge from "../components/PeerBadge";
 import BackButton from "../components/BackButton";
 
 export default function RectoPage() {
-  const { status, code, duration, error, copied, start, stop, copyCode } = useRectoSession();
+  const { status, code, duration, error, copied, peer, start, stop, copyCode } = useRectoSession();
   const navigate = useNavigate();
 
   const fmt = (s: number) =>
@@ -71,6 +72,10 @@ export default function RectoPage() {
               </span>
             )}
           </div>
+
+          {status === "connected" && peer && (
+            <PeerBadge peer={peer} label="Connecté avec" />
+          )}
 
           <p style={{ fontSize: "0.78rem", color: "var(--tx-3)", textAlign: "center", lineHeight: 1.6 }}>
             Verso sur le web ·{" "}
