@@ -10,6 +10,7 @@ type TauriStore = {
   get: <T>(key: string) => Promise<T | undefined>;
   set: (key: string, value: unknown) => Promise<void>;
   delete: (key: string) => Promise<boolean>;
+  save: () => Promise<void>;
 };
 
 const storePath = "auth.json";
@@ -39,11 +40,12 @@ function getStore() {
   if (storePromise) return storePromise;
 
   storePromise = (async () => {
-    if (!("__TAURI_INTERNALS__" in window)) return null;
-
     try {
+      const { isTauri } = await import("@tauri-apps/api/core");
+      if (!isTauri()) return null;
+
       const { Store } = await import("@tauri-apps/plugin-store");
-      return await Store.load(storePath, { defaults: {}, autoSave: true });
+      return await Store.load(storePath, { defaults: {}, autoSave: false });
     } catch {
       return null;
     }
@@ -62,11 +64,17 @@ export const authStorage: AuthStorage = {
   async setItem(key, value) {
     setLocalItem(key, value);
     const store = await getStore();
-    await store?.set(key, value);
+    if (!store) return;
+
+    await store.set(key, value);
+    await store.save();
   },
   async removeItem(key) {
     removeLocalItem(key);
     const store = await getStore();
-    await store?.delete(key);
+    if (!store) return;
+
+    await store.delete(key);
+    await store.save();
   },
 };
