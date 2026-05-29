@@ -1,15 +1,17 @@
 import type { Config } from "tailwindcss";
 
 export default {
-  content: ["./app/**/*.{ts,tsx}", "./lib/**/*.{ts,tsx}"],
+  content: ["./app/**/*.{ts,tsx}", "./lib/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
+  darkMode: ["class", '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
-        brand: {
-          400: "#a78bfa",
-          500: "#8b5cf6",
-          600: "#7c3aed",
-        },
+        bg:      "var(--bg)",
+        surface: "var(--surface)",
+        accent:  "var(--accent)",
+        tx:      "var(--tx)",
+        txm:     "var(--txm)",
+        border:  "var(--border)",
       },
       fontFamily: {
         mono: ["JetBrains Mono", "Fira Code", "monospace"],

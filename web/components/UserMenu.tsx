@@ -32,29 +32,29 @@ export default function UserMenu({ user }: { user: User }) {
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
+        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-surface transition-colors"
       >
         {avatar ? (
           <img src={avatar} alt={name} className="w-6 h-6 rounded-full" />
         ) : (
-          <div className="w-6 h-6 rounded-full bg-brand-600 flex items-center justify-center text-xs font-bold">
+          <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center text-xs font-bold text-accent">
             {name[0].toUpperCase()}
           </div>
         )}
-        <span className="text-sm text-zinc-300 hidden sm:block">{name}</span>
-        <span className="text-zinc-600 text-xs">▾</span>
+        <span className="text-sm text-tx hidden sm:block">{name}</span>
+        <span className="text-txm text-xs">▾</span>
       </button>
 
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-20 w-44 rounded-xl bg-zinc-900 border border-white/10 shadow-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-white/8">
-              <p className="text-xs text-zinc-500 truncate">{user.email}</p>
+          <div className="absolute right-0 top-full mt-1 z-20 w-44 rounded-xl bg-surface border border-border shadow-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-border">
+              <p className="text-xs text-txm truncate">{user.email}</p>
             </div>
             <button
               onClick={handleLogout}
-              className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-white/5 transition-colors"
+              className="w-full text-left px-4 py-2.5 text-sm text-accent hover:bg-accent/8 transition-colors"
             >
               Se déconnecter
             </button>

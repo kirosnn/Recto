@@ -2,12 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Thème sombre (défaut) ── */
+:root {
+  --bg:      #1f1f1e;
+  --surface: #272725;
+  --accent:  #d97757;
+  --tx:      #c3c2b7;
+  --txm:     #706f65;
+  --border:  #2e2d2b;
+}
+
+/* ── Thème clair ── */
+[data-theme="light"] {
+  --bg:      #f5f4ef;
+  --surface: #eeede6;
+  --accent:  #d97757;
+  --tx:      #1f1f1e;
+  --txm:     #706f65;
+  --border:  #e0dfd7;
+}
+
 @layer base {
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; background: #000; color: #fff; }
+
+  html, body {
+    height: 100%;
+    background-color: var(--bg);
+    color: var(--tx);
+  }
+
   body {
     font-family: system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  ::selection { background: rgba(139, 92, 246, 0.3); }
+
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+  }
 }
