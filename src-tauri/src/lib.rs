@@ -2,7 +2,7 @@ mod input;
 
 use tauri::{Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt;
-use tauri_plugin_shell::ShellExt;
+use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
 async fn inject_input(event: input::InputEvent) -> Result<(), String> {
@@ -70,11 +70,12 @@ where
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri::plugin::Builder::<tauri::Wry, ()>::new("external-auth-navigation")
                 .on_navigation(|webview, url| {
                     if should_open_externally(url) {
-                        let _ = webview.app_handle().shell().open(url.as_str(), None);
+                        let _ = webview.app_handle().opener().open_url(url.as_str(), None::<&str>);
                         false
                     } else {
                         true
