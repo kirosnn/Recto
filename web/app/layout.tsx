@@ -12,14 +12,6 @@ export const metadata: Metadata = {
   title: "Recto",
   description: "Partage d'écran P2P serverless — de PC à PC, sans serveur.",
   manifest: "/manifest.webmanifest",
-  icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/icon.png",    type: "image/png" },
-    ],
-    shortcut: "/favicon.ico",
-    apple: "/icon.png",
-  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
