@@ -2,6 +2,8 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useTheme } from "../context/ThemeContext";
 import DiscordIcon from "../components/DiscordIcon";
+import { open } from "@tauri-apps/plugin-shell";
+import { isTauri } from "@tauri-apps/api/core";
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
@@ -10,18 +12,27 @@ export default function LoginPage() {
   const handleLogin = async () => {
     setLoading(true);
     try {
-      // redirectTo = origin courant → http://localhost:5173 (dev) ou tauri://localhost (prod)
+      const runningInTauri = isTauri();
+      const desktopCallback = import.meta.env.VITE_DESKTOP_AUTH_CALLBACK_URL as string | undefined;
+      const redirectTo = runningInTauri
+        ? desktopCallback ?? "https://kirossenrecto.vercel.app/auth/desktop-callback"
+        : `${window.location.origin}/auth/callback`;
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "discord",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          skipBrowserRedirect: true, // on gère la navigation nous-mêmes
+          redirectTo,
+          skipBrowserRedirect: true,
         },
       });
       if (error) throw error;
       if (data.url) {
-        // Naviguer le WebView Tauri directement vers Discord OAuth
-        window.location.href = data.url;
+        if (runningInTauri) {
+          await open(data.url);
+          setLoading(false);
+        } else {
+          window.location.href = data.url;
+        }
       }
     } catch {
       setLoading(false);
@@ -30,7 +41,6 @@ export default function LoginPage() {
 
   return (
     <div className="page" style={{ gap: 28 }}>
-      {/* Theme toggle */}
       <button
         onClick={toggle}
         style={{
