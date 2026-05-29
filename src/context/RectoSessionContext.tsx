@@ -1,9 +1,13 @@
 import { createContext, useContext, useRef, useState, useCallback } from "react";
 import { RectoConnection } from "../lib/webrtc";
 import { endSession } from "../lib/signaling";
+import { identityFromUser } from "../lib/identity";
+import { useAuth } from "./useAuth";
 import { invoke } from "@tauri-apps/api/core";
 
 export type SessionStatus = "idle" | "selecting" | "waiting" | "connected" | "error";
+
+export type PeerIdentity = { name: string; avatar: string | null };
 
 type Ctx = {
   status: SessionStatus;
@@ -11,6 +15,7 @@ type Ctx = {
   duration: number;
   error: string;
   copied: boolean;
+  peer: PeerIdentity | null;
   start: () => Promise<void>;
   stop: () => void;
   copyCode: () => Promise<void>;
@@ -26,18 +31,20 @@ interface DisplayInfo {
 }
 
 const RectoSessionCtx = createContext<Ctx>({
-  status: "idle", code: "", duration: 0, error: "", copied: false,
+  status: "idle", code: "", duration: 0, error: "", copied: false, peer: null,
   start: async () => {}, stop: () => {}, copyCode: async () => {},
 });
 
 export function useRectoSession() { return useContext(RectoSessionCtx); }
 
 export function RectoSessionProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [status, setStatus] = useState<SessionStatus>("idle");
   const [code, setCode] = useState("");
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [peer, setPeer] = useState<PeerIdentity | null>(null);
 
   const conn = useRef<RectoConnection | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -46,7 +53,7 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     if (code) endSession(code).catch(() => {});
     conn.current?.stop(); conn.current = null;
-    setStatus("idle"); setCode(""); setDuration(0); setError("");
+    setStatus("idle"); setCode(""); setDuration(0); setError(""); setPeer(null);
   }, [code]);
 
   const start = useCallback(async () => {
@@ -72,7 +79,19 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
 
       const inputCh = conn.current.getInputChannel();
       if (inputCh) {
+        const self = identityFromUser(user);
         inputCh.onopen = async () => {
+          // Announce our Discord identity to Verso. Sent a few times because the
+          // input channel is unreliable (maxRetransmits: 0).
+          const sendIdentity = () => {
+            if (inputCh.readyState === "open") {
+              inputCh.send(JSON.stringify({ type: "identity", name: self.name, avatar: self.avatar }));
+            }
+          };
+          sendIdentity();
+          setTimeout(sendIdentity, 400);
+          setTimeout(sendIdentity, 1200);
+
           // Send real screen resolution so Verso maps mouse coords correctly
           try {
             const displays = await invoke<DisplayInfo[]>("get_displays");
@@ -94,6 +113,11 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
             const event = JSON.parse(e.data as string);
             // displayInfo is Recto→Verso only; skip if Verso somehow echoes it
             if (event.type === "displayInfo") return;
+            // Verso announces who it is — show it in the UI, don't inject it
+            if (event.type === "identity") {
+              setPeer({ name: event.name, avatar: event.avatar ?? null });
+              return;
+            }
             await invoke("inject_input", { event });
           } catch (err) {
             console.error("[Recto] inject_input failed:", err, e.data);
@@ -116,7 +140,7 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
   }, [code]);
 
   return (
-    <RectoSessionCtx.Provider value={{ status, code, duration, error, copied, start, stop, copyCode }}>
+    <RectoSessionCtx.Provider value={{ status, code, duration, error, copied, peer, start, stop, copyCode }}>
       {children}
     </RectoSessionCtx.Provider>
   );
