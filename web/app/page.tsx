@@ -65,6 +65,82 @@ export default async function Page() {
         </span>
       </div>
 
+      {/* ── Recto / Verso ── */}
+      <section className="main-collaboration">
+        <h2 className="main-collaboration-title">Deux rôles, une idée simple.</h2>
+
+        <div className="main-experience-list">
+          <div className="main-experience-row">
+            <div className="main-experience-company">
+              <span style={{
+                fontFamily: "var(--font-serif)", fontSize: "1.15rem",
+                fontStyle: "italic", letterSpacing: "-0.02em",
+              }}>Recto</span>
+              <span style={{
+                fontSize: "0.76rem", padding: "2px 9px",
+                background: "rgba(217,119,87,0.08)",
+                border: "1px solid rgba(217,119,87,0.18)",
+                borderRadius: "999px", color: "#c4623e",
+                fontWeight: 500,
+              }}>Hôte</span>
+            </div>
+            <div className="main-experience-content">
+              <div className="main-experience-main">
+                <h2>Le PC qui partage son écran</h2>
+                <p>
+                  Recto, c&apos;est toi. Tu ouvres l&apos;app Windows, tu partages ce que tu veux,
+                  et tu reçois un code. Ton PC fait tourner le flux — personne d&apos;autre n&apos;y touche.
+                </p>
+              </div>
+              <span className="main-experience-period">App Windows</span>
+            </div>
+          </div>
+
+          <div className="main-experience-row">
+            <div className="main-experience-company">
+              <span style={{
+                fontFamily: "var(--font-serif)", fontSize: "1.15rem",
+                fontStyle: "italic", letterSpacing: "-0.02em",
+              }}>Verso</span>
+              <span style={{
+                fontSize: "0.76rem", padding: "2px 9px",
+                background: "rgba(18,18,18,0.05)",
+                border: "1px solid rgba(18,18,18,0.1)",
+                borderRadius: "999px", color: "#6d6057",
+                fontWeight: 500,
+              }}>Client</span>
+            </div>
+            <div className="main-experience-content">
+              <div className="main-experience-main">
+                <h2>Le PC (ou navigateur) qui reçoit</h2>
+                <p>
+                  Verso, c&apos;est l&apos;autre personne. Elle entre le code dans l&apos;app ou sur ce site —
+                  et voit ton écran en direct. Elle peut même prendre le contrôle clavier et souris.
+                </p>
+              </div>
+              <span className="main-experience-period">App ou web</span>
+            </div>
+          </div>
+
+          <div className="main-experience-row" style={{ background: "transparent", cursor: "default" }}>
+            <div className="main-experience-company">
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: "0.78rem",
+                color: "#a39589", letterSpacing: "0.02em",
+              }}>Pourquoi ces noms ?</span>
+            </div>
+            <div className="main-experience-content">
+              <div className="main-experience-main">
+                <p style={{ fontStyle: "italic" }}>
+                  Recto et Verso, c&apos;est le recto et le verso d&apos;une feuille.
+                  Le Recto montre, le Verso reçoit. Simple.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── Comment ça marche ── */}
       <section id="comment" className="main-collaboration">
         <h2 className="main-collaboration-title">Aussi simple que ça.</h2>
