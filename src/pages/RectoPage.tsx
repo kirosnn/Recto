@@ -1,23 +1,20 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useNavigate } from "react-router-dom";
 import { RectoConnection } from "../lib/webrtc";
 import { endSession } from "../lib/signaling";
-import SessionCode from "../components/SessionCode";
 
-type Status =
-  | "idle"
-  | "selecting"
-  | "waiting"
-  | "connected"
-  | "error";
+type Status = "idle" | "selecting" | "waiting" | "connected" | "error";
 
 export default function RectoPage() {
   const [status, setStatus] = useState<Status>("idle");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [duration, setDuration] = useState(0);
+  const [copied, setCopied] = useState(false);
   const conn = useRef<RectoConnection | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const navigate = useNavigate();
 
   const handleStart = async () => {
     setStatus("selecting");
@@ -27,159 +24,156 @@ export default function RectoPage() {
         video: { frameRate: 60, cursor: "always" } as MediaTrackConstraints,
         audio: true,
       });
-
       stream.getVideoTracks()[0].onended = () => handleStop();
 
       conn.current = new RectoConnection({
-        onCode: (c) => {
-          setCode(c);
-          setStatus("waiting");
-        },
+        onCode: (c) => { setCode(c); setStatus("waiting"); },
         onConnected: () => {
           setStatus("connected");
-          timerRef.current = setInterval(
-            () => setDuration((d) => d + 1),
-            1000
-          );
+          timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
         },
         onDisconnected: () => handleStop(),
-        onError: (e) => {
-          setError(e);
-          setStatus("error");
-        },
+        onError: (e) => { setError(e); setStatus("error"); },
       });
 
       const inputCh = conn.current.getInputChannel();
       if (inputCh) {
         inputCh.onmessage = async (e) => {
-          try {
-            const event = JSON.parse(e.data as string);
-            await invoke("inject_input", { event });
-          } catch {}
+          try { await invoke("inject_input", { event: JSON.parse(e.data as string) }); } catch {}
         };
       }
-
       await conn.current.start(stream);
     } catch (e: unknown) {
-      if ((e as Error).name !== "NotAllowedError") {
-        setError((e as Error).message || "Erreur inconnue");
-        setStatus("error");
-      } else {
-        setStatus("idle");
-      }
+      if ((e as Error).name !== "NotAllowedError") { setError((e as Error).message || "Erreur"); setStatus("error"); }
+      else setStatus("idle");
     }
   };
 
   const handleStop = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (code) endSession(code).catch(() => {});
-    conn.current?.stop();
-    conn.current = null;
-    setStatus("idle");
-    setCode("");
-    setDuration(0);
+    conn.current?.stop(); conn.current = null;
+    setStatus("idle"); setCode(""); setDuration(0);
+  };
+
+  const copyCode = async () => {
+    await navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   useEffect(() => () => handleStop(), []);
 
-  const formatDuration = (s: number) =>
-    `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(
-      Math.floor((s % 3600) / 60)
-    ).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  const fmt = (s: number) =>
+    [Math.floor(s/3600), Math.floor((s%3600)/60), s%60]
+      .map((n) => String(n).padStart(2, "0")).join(":");
 
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-10 p-8 animate-fade-in">
+    <div className="page" style={{ gap: "clamp(20px, 3vw, 32px)" }}>
+
+      {/* Back */}
+      {status === "idle" || status === "error" ? (
+        <button className="btn btn-ghost" onClick={() => navigate("/")}
+          style={{ position: "absolute", top: 12, left: 12, minHeight: 32, fontSize: "0.82rem", padding: "0 12px" }}>
+          ← Retour
+        </button>
+      ) : null}
+
+      {/* ── Idle ── */}
       {status === "idle" && (
         <>
-          <div className="flex flex-col items-center gap-2">
-            <h2 className="text-2xl font-bold">Partager mon écran</h2>
-            <p className="text-zinc-500 text-sm">
-              Un code sera généré — donne-le au client Verso
+          <div style={{ textAlign: "center" }}>
+            <h1 className="serif" style={{ fontSize: "clamp(1.6rem, 3vw, 2.2rem)", letterSpacing: "-0.04em", color: "var(--tx)" }}>
+              Partager mon écran.
+            </h1>
+            <p style={{ marginTop: 8, fontSize: "0.88rem", color: "var(--tx-2)" }}>
+              Un code sera généré — transmets-le à Verso.
             </p>
           </div>
-          <button
-            onClick={handleStart}
-            className="px-8 py-4 bg-brand-600 hover:bg-brand-500 rounded-xl font-semibold
-                       text-lg transition-colors glow-purple"
-          >
-            🖥 Démarrer le partage
+          <button className="btn btn-accent" style={{ minHeight: 44, padding: "0 28px", fontSize: "0.95rem" }} onClick={handleStart}>
+            Démarrer le partage
           </button>
         </>
       )}
 
+      {/* ── Selecting ── */}
       {status === "selecting" && (
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-8 h-8 border-2 border-zinc-700 border-t-brand-500 rounded-full animate-spin" />
-          <p className="text-zinc-400">Sélectionne une fenêtre ou un écran…</p>
+        <div style={{ textAlign: "center" }}>
+          <Spinner />
+          <p style={{ marginTop: 14, color: "var(--tx-2)", fontSize: "0.9rem" }}>Sélectionne une fenêtre…</p>
         </div>
       )}
 
+      {/* ── Waiting / Connected ── */}
       {(status === "waiting" || status === "connected") && (
-        <div className="flex flex-col items-center gap-8 w-full max-w-md">
-          <SessionCode code={code} />
-
-          <div className="glass rounded-xl p-5 w-full flex flex-col gap-3">
-            <StatusRow
-              label="Statut"
-              value={status === "waiting" ? "En attente du client…" : "Connecté ✓"}
-              valueClass={
-                status === "connected" ? "text-emerald-400" : "text-yellow-400"
-              }
-            />
-            {status === "connected" && (
-              <StatusRow
-                label="Durée"
-                value={formatDuration(duration)}
-                valueClass="code-char text-white"
-              />
-            )}
+        <div style={{ width: "100%", maxWidth: 400, display: "flex", flexDirection: "column", gap: 20 }}>
+          <div style={{ textAlign: "center" }}>
+            <p style={{ fontSize: "0.76rem", color: "var(--tx-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 14 }}>
+              Code de session
+            </p>
+            <div
+              className="code-display"
+              onClick={copyCode}
+              title="Cliquer pour copier"
+              style={{ cursor: "pointer", justifyContent: "center" }}
+            >
+              {code.split("").map((c, i) => (
+                <span key={i} className="code-char">{c}</span>
+              ))}
+            </div>
+            <p style={{ marginTop: 8, fontSize: "0.76rem", color: "var(--tx-3)" }}>
+              {copied ? "✓ Copié !" : "Cliquer pour copier"}
+            </p>
           </div>
 
-          {status === "waiting" && (
-            <p className="text-xs text-zinc-600 text-center">
-              Le client Verso peut aussi se connecter depuis{" "}
-              <span className="text-zinc-400">recto.app/verso</span>
-            </p>
-          )}
+          <div className="card" style={{ padding: "4px 0" }}>
+            <div className="status-row">
+              <span className="status-label">Statut</span>
+              <span className={`status-value${status === "connected" ? " is-active" : ""}`}>
+                {status === "waiting" ? "En attente…" : "Connecté ✓"}
+              </span>
+            </div>
+            {status === "connected" && (
+              <div className="status-row">
+                <span className="status-label">Durée</span>
+                <span className="status-value mono">{fmt(duration)}</span>
+              </div>
+            )}
+            <div className="status-row">
+              <span className="status-label">Web</span>
+              <span className="status-value" style={{ color: "var(--tx-3)" }}>kirossenrecto.vercel.app/verso</span>
+            </div>
+          </div>
 
           <button
+            className="btn btn-ghost"
             onClick={handleStop}
-            className="px-6 py-2.5 rounded-lg border border-red-500/30 text-red-400
-                       hover:bg-red-500/10 transition-colors text-sm"
+            style={{ color: "#c4623e", borderColor: "rgba(217,119,87,0.2)", fontSize: "0.88rem" }}
           >
             Arrêter le partage
           </button>
         </div>
       )}
 
+      {/* ── Error ── */}
       {status === "error" && (
-        <div className="flex flex-col items-center gap-4">
-          <p className="text-red-400">{error}</p>
-          <button
-            onClick={() => setStatus("idle")}
-            className="px-5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm transition-colors"
-          >
-            Réessayer
-          </button>
+        <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
+          <p style={{ color: "#c4623e", fontSize: "0.9rem" }}>{error}</p>
+          <button className="btn btn-ghost" onClick={() => setStatus("idle")}>Réessayer</button>
         </div>
       )}
     </div>
   );
 }
 
-function StatusRow({
-  label,
-  value,
-  valueClass,
-}: {
-  label: string;
-  value: string;
-  valueClass: string;
-}) {
+function Spinner() {
   return (
-    <div className="flex justify-between items-center text-sm">
-      <span className="text-zinc-500">{label}</span>
-      <span className={valueClass}>{value}</span>
-    </div>
+    <div style={{
+      width: 28, height: 28, borderRadius: "50%",
+      border: "2.5px solid var(--border-2)",
+      borderTopColor: "var(--accent)",
+      animation: "spin 0.75s linear infinite",
+      margin: "0 auto",
+    }} />
   );
 }

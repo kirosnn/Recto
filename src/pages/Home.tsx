@@ -4,96 +4,76 @@ export default function Home() {
   const navigate = useNavigate();
 
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-12 p-8 animate-fade-in">
-      <div className="flex flex-col items-center gap-3">
-        <img src="/assets/logo.png" alt="Recto" className="w-16 h-16 object-contain" />
-        <h1 className="text-4xl font-bold tracking-tight">Recto</h1>
-        <p className="text-zinc-500 text-sm">Partage d&apos;écran P2P — sans serveur</p>
+    <div className="page" style={{ gap: "clamp(28px, 4vw, 48px)" }}>
+      {/* Logo + titre */}
+      <div style={{ textAlign: "center" }}>
+        <img
+          src="/assets/desktop-computer_1f5a5-fe0f.png"
+          alt="Recto"
+          style={{ width: 64, height: 64, margin: "0 auto 16px", display: "block" }}
+        />
+        <h1 className="serif" style={{
+          fontSize: "clamp(1.8rem, 3.5vw, 2.6rem)",
+          letterSpacing: "-0.04em", lineHeight: 1.05,
+          color: "var(--tx)",
+        }}>
+          Partage ton écran,<br />
+          <em style={{ color: "var(--accent)" }}>sans serveur.</em>
+        </h1>
+        <p style={{
+          marginTop: 10, fontSize: "0.9rem",
+          color: "var(--tx-2)", lineHeight: 1.55,
+          maxWidth: 360, margin: "10px auto 0",
+        }}>
+          Recto partage. Verso reçoit. Un code suffit.
+        </p>
       </div>
 
-      <div className="flex gap-6">
+      {/* Mode cards */}
+      <div className="mode-cards">
         <ModeCard
+          badge="Hôte"
+          badgeAccent
           title="Recto"
-          subtitle="Partager mon écran"
-          description="Tu es l'hôte. Les autres se connectent à toi."
-          icon="🖥"
-          accent="brand"
+          desc="Partage ton écran. Les autres se connectent avec ton code."
+          cta="Démarrer le partage →"
           onClick={() => navigate("/recto")}
         />
         <ModeCard
+          badge="Client"
           title="Verso"
-          subtitle="Se connecter"
-          description="Entre le code de l'hôte pour voir son écran."
-          icon="📺"
-          accent="emerald"
+          desc="Entre le code de l'hôte pour voir son écran en direct."
+          cta="Se connecter →"
           onClick={() => navigate("/verso")}
         />
       </div>
 
-      <p className="text-xs text-zinc-700">
-        Connexion directe chiffrée via WebRTC · Signaling via Supabase
+      {/* Footer */}
+      <p style={{ fontSize: "0.76rem", color: "var(--tx-3)", letterSpacing: "0.01em" }}>
+        WebRTC P2P · Signaling Supabase · Chiffré E2E
       </p>
     </div>
   );
 }
 
-function ModeCard({
-  title,
-  subtitle,
-  description,
-  icon,
-  accent,
-  onClick,
-}: {
+function ModeCard({ badge, badgeAccent, title, desc, cta, onClick }: {
+  badge: string;
+  badgeAccent?: boolean;
   title: string;
-  subtitle: string;
-  description: string;
-  icon: string;
-  accent: "brand" | "emerald";
+  desc: string;
+  cta: string;
   onClick: () => void;
 }) {
-  const accentClasses = {
-    brand: {
-      border: "hover:border-brand-500/50 hover:shadow-brand-500/10",
-      badge: "bg-brand-500/20 text-brand-300",
-      btn: "bg-brand-600 hover:bg-brand-500",
-    },
-    emerald: {
-      border: "hover:border-emerald-500/50 hover:shadow-emerald-500/10",
-      badge: "bg-emerald-500/20 text-emerald-300",
-      btn: "bg-emerald-600 hover:bg-emerald-500",
-    },
-  }[accent];
-
   return (
-    <button
-      onClick={onClick}
-      className={`
-        group flex flex-col gap-5 p-7 w-64 text-left
-        glass rounded-2xl border border-white/8
-        hover:shadow-xl transition-all duration-300
-        ${accentClasses.border}
-      `}
-    >
-      <div className="flex items-center justify-between">
-        <span
-          className={`text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-widest ${accentClasses.badge}`}
-        >
-          {title}
-        </span>
-        <span className="text-2xl">{icon}</span>
+    <button className="mode-card" onClick={onClick}>
+      <span className={`mode-card-badge${badgeAccent ? " is-accent" : ""}`}>
+        {badge}
+      </span>
+      <div>
+        <h3 className="serif" style={{ fontSize: "1.2rem", fontStyle: "italic" }}>{title}</h3>
+        <p style={{ marginTop: 4 }}>{desc}</p>
       </div>
-
-      <div className="flex flex-col gap-1.5">
-        <h2 className="text-lg font-semibold">{subtitle}</h2>
-        <p className="text-sm text-zinc-500 leading-relaxed">{description}</p>
-      </div>
-
-      <div
-        className={`mt-auto px-4 py-2.5 rounded-lg text-sm font-medium text-white text-center transition-colors ${accentClasses.btn}`}
-      >
-        Continuer →
-      </div>
+      <span className="mode-card-cta">{cta}</span>
     </button>
   );
 }
