@@ -16,6 +16,15 @@ type Ctx = {
   copyCode: () => Promise<void>;
 };
 
+interface DisplayInfo {
+  id: number;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  primary: boolean;
+}
+
 const RectoSessionCtx = createContext<Ctx>({
   status: "idle", code: "", duration: 0, error: "", copied: false,
   start: async () => {}, stop: () => {}, copyCode: async () => {},
@@ -63,10 +72,35 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
 
       const inputCh = conn.current.getInputChannel();
       if (inputCh) {
+        inputCh.onopen = async () => {
+          // Send real screen resolution so Verso maps mouse coords correctly
+          try {
+            const displays = await invoke<DisplayInfo[]>("get_displays");
+            const primary = displays.find((d) => d.primary) ?? displays[0];
+            if (primary) {
+              inputCh.send(JSON.stringify({
+                type: "displayInfo",
+                width: primary.width,
+                height: primary.height,
+              }));
+            }
+          } catch (err) {
+            console.error("[Recto] get_displays failed:", err);
+          }
+        };
+
         inputCh.onmessage = async (e) => {
-          try { await invoke("inject_input", { event: JSON.parse(e.data as string) }); } catch {}
+          try {
+            const event = JSON.parse(e.data as string);
+            // displayInfo is Recto→Verso only; skip if Verso somehow echoes it
+            if (event.type === "displayInfo") return;
+            await invoke("inject_input", { event });
+          } catch (err) {
+            console.error("[Recto] inject_input failed:", err, e.data);
+          }
         };
       }
+
       await conn.current.start(stream);
     } catch (e: unknown) {
       if ((e as Error).name !== "NotAllowedError") { setError((e as Error).message || "Erreur"); setStatus("error"); }
