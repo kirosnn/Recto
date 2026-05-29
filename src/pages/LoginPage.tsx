@@ -1,13 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import { useTheme } from "../context/ThemeContext";
+import { useAuth } from "../context/useAuth";
+import PreferencesDrawer from "../components/PreferencesDrawer";
 import DiscordIcon from "../components/DiscordIcon";
 import { open } from "@tauri-apps/plugin-shell";
 import { isTauri } from "@tauri-apps/api/core";
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
-  const { theme, toggle } = useTheme();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user) navigate("/", { replace: true });
+  }, [user, navigate]);
 
   const handleLogin = async () => {
     setLoading(true);
@@ -41,19 +48,7 @@ export default function LoginPage() {
 
   return (
     <div className="page" style={{ gap: 28 }}>
-      <button
-        onClick={toggle}
-        style={{
-          position: "absolute", top: 10, right: 10,
-          width: 32, height: 32, borderRadius: 8,
-          border: "1px solid var(--border-2)", background: "transparent",
-          cursor: "pointer", color: "var(--tx-3)", fontSize: 13,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}
-        title={theme === "dark" ? "Thème clair" : "Thème sombre"}
-      >
-        {theme === "dark" ? "☀" : "☾"}
-      </button>
+      <PreferencesDrawer />
 
       <div style={{ textAlign: "center" }}>
         <img

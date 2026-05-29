@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import BackButton from "../../../components/BackButton";
 
 function buildAppUrl(search: string) {
   const params = new URLSearchParams(search);
@@ -42,7 +43,8 @@ export default function DesktopCallbackPage() {
   };
 
   return (
-    <main className="main-page recto-form-page" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", padding: 24 }}>
+    <main className="main-page recto-form-page" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", padding: 24, position: "relative" }}>
+      <BackButton href="/login" />
       <section className="recto-form-inner" style={{ width: "100%", maxWidth: 420 }}>
         <h1 className="main-intro" style={{ marginTop: 0, textAlign: "left" }}>
           Ouvrir Recto
@@ -63,14 +65,6 @@ export default function DesktopCallbackPage() {
           >
             {opened ? "Rouvrir Recto" : "Ouvrir Recto"}
           </button>
-
-          <Link
-            href="/login"
-            className="main-button"
-            style={{ width: "100%", minHeight: 46, fontSize: "0.95rem", textDecoration: "none" }}
-          >
-            Revenir au site
-          </Link>
         </div>
       </section>
     </main>

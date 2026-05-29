@@ -118,6 +118,29 @@ html[data-theme="dark"] body { background: #202020; color: #f5f1e8; }
     width: min(100%, 860px);
 }
 
+/* ── Back button ──────────────────────────────────────── */
+.back-btn {
+    position: absolute;
+    top: 14px;
+    left: 16px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #a39589;
+    border-radius: 8px;
+    transition: color 160ms ease, transform 160ms ease;
+    text-decoration: none;
+    padding: 0;
+}
+.back-btn:hover { color: #121212; }
+html[data-theme="dark"] .back-btn { color: #555550; }
+html[data-theme="dark"] .back-btn:hover { color: #f5f1e8; }
+
 .main-button {
     display: inline-flex;
     align-items: center;

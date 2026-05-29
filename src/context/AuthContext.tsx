@@ -7,9 +7,7 @@ import { listen } from "@tauri-apps/api/event";
 
 type AuthCtx = { user: User | null; loading: boolean; signOut: () => Promise<void> };
 
-const Ctx = createContext<AuthCtx>({ user: null, loading: true, signOut: async () => {} });
-
-export function useAuth() { return useContext(Ctx); }
+export const Ctx = createContext<AuthCtx>({ user: null, loading: true, signOut: async () => {} });
 
 function isInvalidStoredSession(error: unknown) {
   if (!error || typeof error !== "object") return false;
@@ -18,7 +16,7 @@ function isInvalidStoredSession(error: unknown) {
   const message = typeof authError.message === "string" ? authError.message.toLowerCase() : "";
   const status = typeof authError.status === "number" ? authError.status : undefined;
 
-  return status === 401 || message.includes("refresh token") || message.includes("invalid refresh");
+  return message.includes("refresh token") || message.includes("invalid refresh");
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

@@ -20,6 +20,10 @@ create index if not exists sessions_code_idx on public.sessions (code);
 -- Index pour nettoyer les sessions expirées
 create index if not exists sessions_expires_idx on public.sessions (expires_at);
 
+-- Grants explicites pour les rôles (requis avec les nouvelles API keys Supabase)
+grant select, insert, update on public.sessions to anon;
+grant select, insert, update on public.sessions to authenticated;
+
 -- Row Level Security
 alter table public.sessions enable row level security;
 

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { WebVersoConnection } from "../../../lib/webrtc";
+import BackButton from "../../../components/BackButton";
 
 type Status = "idle" | "connecting" | "connected" | "error";
 
@@ -68,8 +69,10 @@ export default function VersoPage() {
       style={{
         display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center", minHeight: "100vh",
+        position: "relative",
       }}
     >
+      <BackButton href="/" />
       <div className="recto-form-inner" style={{ width: "100%", maxWidth: "360px" }}>
         <h1 className="main-intro" style={{ textAlign: "left", marginTop: 0 }}>
           Se connecter.

@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { VersoConnection } from "../lib/webrtc";
 import VideoDisplay from "../components/VideoDisplay";
-import ThemeToggle from "../components/ThemeToggle";
+import PreferencesDrawer from "../components/PreferencesDrawer";
+import BackButton from "../components/BackButton";
 
 type Status = "idle" | "connecting" | "connected" | "error";
 
@@ -67,13 +68,8 @@ export default function VersoPage() {
 
   return (
     <div className="page" style={{ gap: "clamp(20px, 3vw, 32px)" }}>
-      <div style={{ position: "absolute", top: 10, right: 10 }}>
-        <ThemeToggle />
-      </div>
-      <button className="btn btn-ghost" onClick={() => navigate("/")}
-        style={{ position: "absolute", top: 10, left: 10, minHeight: 32, fontSize: "0.82rem", padding: "0 12px" }}>
-        ← Retour
-      </button>
+      <PreferencesDrawer />
+      <BackButton />
 
       <div style={{ textAlign: "center" }}>
         <h1 className="serif" style={{ fontSize: "clamp(1.6rem, 3vw, 2.2rem)", letterSpacing: "-0.04em", color: "var(--tx)" }}>

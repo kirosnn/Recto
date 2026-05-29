@@ -3,7 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { useNavigate } from "react-router-dom";
 import { RectoConnection } from "../lib/webrtc";
 import { endSession } from "../lib/signaling";
-import ThemeToggle from "../components/ThemeToggle";
+import PreferencesDrawer from "../components/PreferencesDrawer";
+import BackButton from "../components/BackButton";
 
 type Status = "idle" | "selecting" | "waiting" | "connected" | "error";
 
@@ -22,9 +23,10 @@ export default function RectoPage() {
     setError("");
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: 60, cursor: "always" } as MediaTrackConstraints,
+        video: { displaySurface: "monitor", frameRate: 60, cursor: "always" } as MediaTrackConstraints,
         audio: true,
-      });
+        selfBrowserSurface: "exclude",
+      } as DisplayMediaStreamOptions);
       stream.getVideoTracks()[0].onended = () => handleStop();
 
       conn.current = new RectoConnection({
@@ -72,16 +74,8 @@ export default function RectoPage() {
   return (
     <div className="page" style={{ gap: "clamp(20px, 3vw, 32px)" }}>
 
-      {/* Top bar */}
-      <div style={{ position: "absolute", top: 10, right: 10 }}>
-        <ThemeToggle />
-      </div>
-      {(status === "idle" || status === "error") && (
-        <button className="btn btn-ghost" onClick={() => navigate("/")}
-          style={{ position: "absolute", top: 10, left: 10, minHeight: 32, fontSize: "0.82rem", padding: "0 12px" }}>
-          ← Retour
-        </button>
-      )}
+      <PreferencesDrawer />
+      {(status === "idle" || status === "error") && <BackButton />}
 
       {/* ── Idle ── */}
       {status === "idle" && (
@@ -104,15 +98,17 @@ export default function RectoPage() {
       {status === "selecting" && (
         <div style={{ textAlign: "center" }}>
           <Spinner />
-          <p style={{ marginTop: 14, color: "var(--tx-2)", fontSize: "0.9rem" }}>Sélectionne une fenêtre…</p>
+          <p style={{ marginTop: 14, color: "var(--tx-2)", fontSize: "0.9rem" }}>Sélectionne ton écran…</p>
         </div>
       )}
 
       {/* ── Waiting / Connected ── */}
       {(status === "waiting" || status === "connected") && (
-        <div style={{ width: "100%", maxWidth: 400, display: "flex", flexDirection: "column", gap: 20 }}>
+        <div style={{ width: "100%", maxWidth: 360, display: "flex", flexDirection: "column", alignItems: "center", gap: 28 }}>
+
+          {/* Code */}
           <div style={{ textAlign: "center" }}>
-            <p style={{ fontSize: "0.76rem", color: "var(--tx-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 14 }}>
+            <p style={{ fontSize: "0.72rem", color: "var(--tx-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 16 }}>
               Code de session
             </p>
             <div
@@ -125,34 +121,34 @@ export default function RectoPage() {
                 <span key={i} className="code-char">{c}</span>
               ))}
             </div>
-            <p style={{ marginTop: 8, fontSize: "0.76rem", color: "var(--tx-3)" }}>
+            <p style={{ marginTop: 10, fontSize: "0.76rem", color: copied ? "var(--accent)" : "var(--tx-3)", transition: "color 200ms ease" }}>
               {copied ? "✓ Copié !" : "Cliquer pour copier"}
             </p>
           </div>
 
-          <div className="card" style={{ padding: "4px 0" }}>
-            <div className="status-row">
-              <span className="status-label">Statut</span>
-              <span className={`status-value${status === "connected" ? " is-active" : ""}`}>
-                {status === "waiting" ? "En attente…" : "Connecté ✓"}
-              </span>
-            </div>
+          {/* Status pills */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <StatusPill
+              active={status === "connected"}
+              label={status === "waiting" ? "En attente…" : "Connecté"}
+            />
             {status === "connected" && (
-              <div className="status-row">
-                <span className="status-label">Durée</span>
-                <span className="status-value mono">{fmt(duration)}</span>
-              </div>
+              <span className="mono" style={{ fontSize: "0.82rem", color: "var(--tx-3)", letterSpacing: "0.02em" }}>
+                {fmt(duration)}
+              </span>
             )}
-            <div className="status-row">
-              <span className="status-label">Web</span>
-              <span className="status-value" style={{ color: "var(--tx-3)" }}>kirossenrecto.vercel.app/verso</span>
-            </div>
           </div>
+
+          {/* Hint */}
+          <p style={{ fontSize: "0.78rem", color: "var(--tx-3)", textAlign: "center", lineHeight: 1.6 }}>
+            Verso sur le web ·{" "}
+            <span style={{ color: "var(--tx-2)" }}>kirossenrecto.vercel.app/verso</span>
+          </p>
 
           <button
             className="btn btn-ghost"
             onClick={handleStop}
-            style={{ color: "#c4623e", borderColor: "rgba(217,119,87,0.2)", fontSize: "0.88rem" }}
+            style={{ color: "#c4623e", borderColor: "rgba(217,119,87,0.2)", fontSize: "0.88rem", width: "100%" }}
           >
             Arrêter le partage
           </button>
@@ -179,5 +175,25 @@ function Spinner() {
       animation: "spin 0.75s linear infinite",
       margin: "0 auto",
     }} />
+  );
+}
+
+function StatusPill({ active, label }: { active: boolean; label: string }) {
+  return (
+    <div style={{
+      display: "inline-flex", alignItems: "center", gap: 7,
+      padding: "5px 12px", borderRadius: 999,
+      border: "1px solid var(--border-2)",
+      background: "var(--bg-alt)",
+      fontSize: "0.82rem", color: active ? "var(--tx)" : "var(--tx-2)",
+    }}>
+      <span style={{
+        width: 7, height: 7, borderRadius: "50%",
+        background: active ? "#4caf7d" : "var(--tx-3)",
+        boxShadow: active ? "0 0 6px rgba(76,175,125,0.6)" : "none",
+        transition: "background 400ms ease, box-shadow 400ms ease",
+      }} />
+      {label}
+    </div>
   );
 }

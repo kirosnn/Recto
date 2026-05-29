@@ -56,16 +56,27 @@ function getStore() {
 
 export const authStorage: AuthStorage = {
   async getItem(key) {
+    // 1. Try browser localStorage first — fast, naturally maintained by the webview
+    const local = getLocalItem(key);
+    if (local !== null) return local;
+
+    // 2. Fall back to Tauri persistent store (survives localStorage clears)
     const store = await getStore();
     const value = await store?.get<unknown>(key);
-    if (typeof value === "string") return value;
-    return getLocalItem(key);
+    if (typeof value === "string") {
+      // Restore to localStorage so future reads are instant
+      setLocalItem(key, value);
+      return value;
+    }
+
+    return null;
   },
   async setItem(key, value) {
+    // Write to localStorage immediately (synchronous, used on next read)
     setLocalItem(key, value);
+    // Persist to Tauri store as durable backup
     const store = await getStore();
     if (!store) return;
-
     await store.set(key, value);
     await store.save();
   },
@@ -73,7 +84,6 @@ export const authStorage: AuthStorage = {
     removeLocalItem(key);
     const store = await getStore();
     if (!store) return;
-
     await store.delete(key);
     await store.save();
   },
