@@ -1,6 +1,8 @@
 mod input;
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_shell::ShellExt;
 
 #[tauri::command]
 async fn inject_input(event: input::InputEvent) -> Result<(), String> {
@@ -36,11 +38,64 @@ async fn close_window(window: tauri::Window) {
     let _ = window.close();
 }
 
+#[tauri::command]
+async fn get_auth_deep_links() -> Vec<String> {
+    auth_deep_links_from_args(std::env::args())
+}
+
+fn should_open_externally(url: &tauri::Url) -> bool {
+    matches!(
+        url.host_str(),
+        Some("discord.com" | "ptb.discord.com" | "canary.discord.com" | "fresxzlxizgvrtqlyunz.supabase.co")
+    )
+}
+
+fn auth_deep_links_from_args<I, S>(args: I) -> Vec<String>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    args.into_iter()
+        .filter_map(|arg| {
+            let value = arg.as_ref();
+            if value.starts_with("recto://") {
+                Some(value.to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(
+            tauri::plugin::Builder::<tauri::Wry, ()>::new("external-auth-navigation")
+                .on_navigation(|webview, url| {
+                    if should_open_externally(url) {
+                        let _ = webview.app_handle().shell().open(url.as_str(), None);
+                        false
+                    } else {
+                        true
+                    }
+                })
+                .build(),
+        )
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            for url in auth_deep_links_from_args(args) {
+                let _ = app.emit("auth-deep-link", url);
+            }
+
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
+        .plugin(tauri_plugin_store::Builder::default().build())
         .setup(|app| {
+            let _ = app.deep_link().register_all();
             let window = app.get_webview_window("main").unwrap();
             #[cfg(debug_assertions)]
             window.open_devtools();
@@ -53,6 +108,7 @@ pub fn run() {
             minimize_window,
             maximize_window,
             close_window,
+            get_auth_deep_links,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
