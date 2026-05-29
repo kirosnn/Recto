@@ -12,37 +12,38 @@ export default async function Page() {
       {/* ── Header ── */}
       <header className="main-header">
         <Image
-          src="/assets/logo.png"
+          src="/assets/desktop-computer.png"
           alt="Recto"
-          width={64}
-          height={64}
+          width={72}
+          height={72}
           className="main-logo"
           priority
+          style={{ imageRendering: "auto" }}
         />
       </header>
 
       {/* ── Intro ── */}
       <h1 className="main-intro">
-        <span className="main-line">Partage d&apos;écran de PC à PC,</span>
-        <span className="main-line">sans serveur intermédiaire.</span>
+        <span className="main-line">Vois l&apos;écran de n&apos;importe quel PC</span>
+        <span className="main-line">en quelques secondes.</span>
       </h1>
 
       {/* ── Body ── */}
       <p className="main-body">
-        Recto transforme ton PC en hôte de streaming. Verso s&apos;y connecte
-        via un code à 6 caractères — depuis l&apos;app Windows ou le navigateur.
-        Connexion P2P WebRTC chiffrée de bout en bout, signaling via Supabase Realtime.
+        Partage un code, connecte-toi. Pas d&apos;inscription, pas d&apos;installation côté client,
+        pas de serveur qui se souvient de toi. Recto et Verso se trouvent directement —
+        et dès que c&apos;est fait, tout passe entre vos deux PC.
       </p>
 
       {/* ── Actions ── */}
       <div className="main-actions">
         {user ? (
-          <Link href="/verso" className="main-button main-button-primary is-accent">
+          <Link href="/verso" className="main-button main-button-primary is-accent recto-cta">
             Rejoindre en Verso
           </Link>
         ) : (
-          <Link href="/login" className="main-button main-button-primary is-accent">
-            Se connecter
+          <Link href="/login" className="main-button main-button-primary is-accent recto-cta">
+            Commencer
           </Link>
         )}
         <a href="#comment" className="main-button main-button-secondary">
@@ -56,36 +57,37 @@ export default async function Page() {
           <span style={{
             width: "8px", height: "8px", borderRadius: "50%",
             background: "#d97757", flexShrink: 0,
-            boxShadow: "0 0 0 2px rgba(217,119,87,0.2)",
+            boxShadow: "0 0 0 3px rgba(217,119,87,0.18)",
             display: "inline-block",
+            animation: "recto-pulse 2.5s ease-in-out infinite",
           }} />
-          Bêta · Connexion directe · Zéro relais
+          Gratuit · Sans compte · Connexion directe
         </span>
       </div>
 
       {/* ── Comment ça marche ── */}
       <section id="comment" className="main-collaboration">
-        <h2 className="main-collaboration-title">Comment ça marche.</h2>
+        <h2 className="main-collaboration-title">Aussi simple que ça.</h2>
 
         <div className="main-experience-list">
           {[
             {
               num: "01",
-              title: "Lance Recto sur le PC hôte",
-              desc: "Ouvre l'app Windows, clique « Partager mon écran » et sélectionne la fenêtre ou l'écran à partager.",
+              title: "Tu ouvres Recto sur ton PC",
+              desc: "Lance l'app, clique sur partager, choisis ce que tu veux montrer. Un code apparaît.",
               badge: "App Windows",
             },
             {
               num: "02",
-              title: "Partage le code à 6 caractères",
-              desc: "Recto génère un code unique valable 15 minutes. Envoie-le par Discord, message, ou autre.",
-              badge: "Ex : AB3XK7",
+              title: "Tu envoies le code",
+              desc: "Six lettres. Par Discord, SMS, ou à voix haute. L'autre personne l'entre sur son téléphone ou navigateur.",
+              badge: "Expire en 15 min",
             },
             {
               num: "03",
-              title: "Verso se connecte et voit l'écran",
-              desc: "Le client saisit le code dans l'app ou ici dans le navigateur. La connexion P2P s'établit directement.",
-              badge: "App ou navigateur",
+              title: "La connexion se fait toute seule",
+              desc: "Pas de configuration réseau, pas de port à ouvrir. Ça marche derrière n'importe quel routeur.",
+              badge: "Navigateur ou app",
             },
           ].map((step) => (
             <div key={step.num} className="main-experience-row">
@@ -117,16 +119,32 @@ export default async function Page() {
         </div>
       </section>
 
-      {/* ── Sous le capot ── */}
+      {/* ── Pourquoi Recto ── */}
       <section className="main-collaboration">
-        <h2 className="main-collaboration-title">Sous le capot.</h2>
+        <h2 className="main-collaboration-title">Pourquoi Recto.</h2>
 
         <div className="main-experience-list">
           {[
-            { label: "Signaling",     period: "Supabase",  desc: "SDP + ICE échangés via Supabase Realtime. Aucun serveur de relais — juste un canal temps réel qui sort de la boucle une fois connecté." },
-            { label: "NAT Traversal", period: "STUN/ICE",  desc: "ICE + STUN (Google) trouve la route directe entre les deux machines, même derrière un NAT strict ou un pare-feu." },
-            { label: "Stream",        period: "WebRTC E2E", desc: "Vidéo (60 FPS) et audio circulent directement de Recto à Verso, chiffrés de bout en bout. Supabase ne touche pas le flux." },
-            { label: "Input",         period: "SendInput",  desc: "Clavier et souris capturés chez Verso, injectés côté Recto via l'API Windows SendInput — latence < 5ms en LAN." },
+            {
+              label: "Instantané",
+              period: "< 3 secondes",
+              desc: "De « j'ouvre l'app » à « tu vois mon écran » en moins de 3 secondes. Pas de salle d'attente, pas de chargement.",
+            },
+            {
+              label: "Privé",
+              period: "Chiffré E2E",
+              desc: "Ta vidéo ne passe jamais par nos serveurs. Elle va directement de ton PC à celui de l'autre personne, et personne d'autre ne peut la voir.",
+            },
+            {
+              label: "Fluide",
+              period: "Jusqu'à 60 FPS",
+              desc: "Assez rapide pour du jeu vidéo, assez clair pour du code, assez fiable pour une démo client.",
+            },
+            {
+              label: "Contrôle total",
+              period: "Clavier & souris",
+              desc: "La personne en Verso peut prendre la main sur ton PC — comme si elle était là, mais à l'autre bout du monde.",
+            },
           ].map((row) => (
             <div key={row.label} className="main-experience-row">
               <div className="main-experience-company">
@@ -165,8 +183,19 @@ export default async function Page() {
         </div>
       </footer>
 
-      {/* ── Preferences Drawer ── */}
       <PreferencesDrawer user={user as Parameters<typeof PreferencesDrawer>[0]["user"]} />
+
+      <style>{`
+        @keyframes recto-pulse {
+          0%, 100% { box-shadow: 0 0 0 3px rgba(217,119,87,0.18); }
+          50%       { box-shadow: 0 0 0 5px rgba(217,119,87,0.08); }
+        }
+        .recto-cta {
+          transition: box-shadow 180ms ease, transform 180ms ease !important;
+        }
+        .recto-cta:hover  { transform: scale(1.03); }
+        .recto-cta:active { transform: scale(0.97); }
+      `}</style>
     </div>
   );
 }
