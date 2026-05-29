@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRectoSession } from "../context/RectoSessionContext";
 import PreferencesDrawer from "../components/PreferencesDrawer";
@@ -5,8 +6,30 @@ import PeerBadge from "../components/PeerBadge";
 import BackButton from "../components/BackButton";
 
 export default function RectoPage() {
-  const { status, code, duration, error, copied, peer, start, stop, copyCode } = useRectoSession();
+  const { status, code, duration, error, copied, peer, lastInputRef, start, stop, copyCode } = useRectoSession();
   const navigate = useNavigate();
+
+  // Debug overlay (Ctrl+Alt+D): shows the last input event injected on the host,
+  // so input can be verified even when testing on a single machine.
+  const [showDebug, setShowDebug] = useState(false);
+  const [dbg, setDbg] = useState({ summary: "", count: 0 });
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.altKey && e.code === "KeyD") {
+        e.preventDefault();
+        setShowDebug((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    if (!showDebug) return;
+    const id = setInterval(() => setDbg({ ...lastInputRef.current }), 100);
+    return () => clearInterval(id);
+  }, [showDebug, lastInputRef]);
 
   const fmt = (s: number) =>
     [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60]
@@ -22,6 +45,26 @@ export default function RectoPage() {
       <BackButton
         onClick={() => navigate("/")}
       />
+
+      {showDebug && (
+        <div
+          className="mono"
+          style={{
+            position: "fixed", bottom: 12, left: 12, zIndex: 9999,
+            padding: "10px 14px", borderRadius: 10,
+            background: "rgba(0,0,0,0.82)", color: "#7CFC9B",
+            border: "1px solid rgba(124,252,155,0.3)",
+            fontSize: "0.78rem", lineHeight: 1.5, pointerEvents: "none",
+            boxShadow: "0 4px 14px rgba(0,0,0,0.4)", minWidth: 180,
+          }}
+        >
+          <div style={{ color: "rgba(255,255,255,0.55)", fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
+            Debug input · Ctrl+Alt+D
+          </div>
+          <div>reçus : {dbg.count}</div>
+          <div>dernier : {dbg.summary || "—"}</div>
+        </div>
+      )}
 
       {/* ── Idle ── */}
       {status === "idle" && (
