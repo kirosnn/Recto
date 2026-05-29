@@ -3,6 +3,7 @@
 import { motion } from "motion/react";
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect } from "react";
 import PreferencesDrawer from "./PreferencesDrawer";
 
 // ── Variants copiés exactement du kirosnn-portifolio ──────────
@@ -55,6 +56,38 @@ type User = {
 } | null;
 
 export default function MainContent({ user }: { user: User }) {
+  useEffect(() => {
+    const root = document.documentElement;
+    const lockClass = "main-page-scroll-locked";
+    let frame = 0;
+
+    const keepTop = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (root.classList.contains(lockClass) && window.scrollY !== 0) {
+          window.scrollTo(0, 0);
+        }
+      });
+    };
+
+    root.classList.add(lockClass);
+    window.scrollTo(0, 0);
+    window.addEventListener("scroll", keepTop, { passive: true });
+
+    const timer = window.setTimeout(() => {
+      root.classList.remove(lockClass);
+      window.removeEventListener("scroll", keepTop);
+      cancelAnimationFrame(frame);
+    }, 4100);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("scroll", keepTop);
+      root.classList.remove(lockClass);
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+
   return (
     <div className="main-page">
 
