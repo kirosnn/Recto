@@ -5,12 +5,10 @@ import Link from "next/link";
 
 function buildAppUrl(search: string) {
   const params = new URLSearchParams(search);
-  const hash = typeof window === "undefined" ? "" : window.location.hash.slice(1);
-  const hashParams = new URLSearchParams(hash);
   const appParams = new URLSearchParams();
 
-  for (const key of ["code", "access_token", "refresh_token", "expires_at", "expires_in", "token_type", "error", "error_code", "error_description", "state"]) {
-    const value = params.get(key) ?? hashParams.get(key);
+  for (const key of ["code", "error", "error_code", "error_description", "state"]) {
+    const value = params.get(key);
     if (value) appParams.set(key, value);
   }
 
@@ -28,8 +26,7 @@ export default function DesktopCallbackPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const hashParams = new URLSearchParams(window.location.hash.slice(1));
-    setHasCode(params.has("code") || hashParams.has("access_token"));
+    setHasCode(params.has("code"));
 
     const timer = window.setTimeout(() => {
       setOpened(true);
