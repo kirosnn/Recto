@@ -39,6 +39,7 @@ async fn close_window(window: tauri::Window) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
             #[cfg(debug_assertions)]

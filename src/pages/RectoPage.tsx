@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useNavigate } from "react-router-dom";
 import { RectoConnection } from "../lib/webrtc";
 import { endSession } from "../lib/signaling";
+import ThemeToggle from "../components/ThemeToggle";
 
 type Status = "idle" | "selecting" | "waiting" | "connected" | "error";
 
@@ -71,13 +72,16 @@ export default function RectoPage() {
   return (
     <div className="page" style={{ gap: "clamp(20px, 3vw, 32px)" }}>
 
-      {/* Back */}
-      {status === "idle" || status === "error" ? (
+      {/* Top bar */}
+      <div style={{ position: "absolute", top: 10, right: 10 }}>
+        <ThemeToggle />
+      </div>
+      {(status === "idle" || status === "error") && (
         <button className="btn btn-ghost" onClick={() => navigate("/")}
-          style={{ position: "absolute", top: 12, left: 12, minHeight: 32, fontSize: "0.82rem", padding: "0 12px" }}>
+          style={{ position: "absolute", top: 10, left: 10, minHeight: 32, fontSize: "0.82rem", padding: "0 12px" }}>
           ← Retour
         </button>
-      ) : null}
+      )}
 
       {/* ── Idle ── */}
       {status === "idle" && (
