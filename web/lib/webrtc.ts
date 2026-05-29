@@ -89,6 +89,10 @@ export class WebVersoConnection {
     await submitAnswer(code, completeAnswer);
   }
 
+  getStats(): Promise<RTCStatsReport> {
+    return this.pc.getStats();
+  }
+
   stop() {
     this.pc.close();
   }

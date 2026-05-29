@@ -7,6 +7,8 @@ import { identityFromUser, type Identity } from "../../../lib/identity";
 import VideoDisplay from "../../../components/VideoDisplay";
 import PeerBadge from "../../../components/PeerBadge";
 import BackButton from "../../../components/BackButton";
+import StatsOverlay from "../../../components/StatsOverlay";
+import { useWebSettings } from "../../../lib/webSettings";
 
 type Status = "idle" | "connecting" | "connected" | "error";
 
@@ -21,7 +23,9 @@ export default function VersoPage() {
   const [peer, setPeer] = useState<PeerIdentity | null>(null);
   // Ctrl+Alt+H hides the on-video overlays for an immersive view
   const [hideUI, setHideUI] = useState(false);
+  const [showStats, setShowStats] = useState(false);
   const conn = useRef<WebVersoConnection | null>(null);
+  const { settings } = useWebSettings();
   // Our own Discord identity, sent to Recto once the input channel opens
   const selfIdentity = useRef<Identity | null>(null);
 
@@ -118,6 +122,23 @@ export default function VersoPage() {
     exitFullscreen();
   };
 
+  // Toggle stats overlay with Ctrl+Alt+S
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.altKey && e.code === "KeyS") {
+        e.preventDefault();
+        setShowStats((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Sync showStats from drawer settings
+  useEffect(() => {
+    setShowStats(settings.showStats);
+  }, [settings.showStats]);
+
   if (status === "connected" || stream) {
     return (
       <div
@@ -136,6 +157,12 @@ export default function VersoPage() {
           hideUI={hideUI}
           onToggleUI={() => setHideUI((v) => !v)}
         />
+        {conn.current && (
+          <StatsOverlay
+            getStats={() => conn.current!.getStats()}
+            visible={showStats && !hideUI}
+          />
+        )}
         {peer && !hideUI && (
           <PeerBadge
             peer={peer}

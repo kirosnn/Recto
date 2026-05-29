@@ -1,0 +1,15 @@
+{
+  "name": "windirector-bench",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "WebRTC benchmark suite for WinDirector",
+  "scripts": {
+    "setup": "playwright install chromium --with-deps",
+    "bench": "node index.mjs",
+    "bench:quick": "node index.mjs --quick"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}

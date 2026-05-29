@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useState } from "react";
+import { useWebSettings } from "../lib/webSettings";
 
 interface VideoDisplayProps {
   stream: MediaStream | null;
@@ -46,12 +47,14 @@ export default function VideoDisplay({
   hideUI,
   onToggleUI,
 }: VideoDisplayProps) {
+  const { settings } = useWebSettings();
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const kbRef = useRef<HTMLInputElement>(null);
   const [isLocked, setIsLocked] = useState(false);
   const [isTouch, setIsTouch] = useState(false);
   const [kbActive, setKbActive] = useState(false);
+  const lastMoveRef = useRef(0);
 
   useEffect(() => {
     if (videoRef.current && stream) {
@@ -296,6 +299,12 @@ export default function VideoDisplay({
       onClick={requestLock}
       onMouseMove={(e) => {
         if (isTouch) return;
+        const throttle = settings.inputThrottleMs;
+        if (throttle > 0) {
+          const now = performance.now();
+          if (now - lastMoveRef.current < throttle) return;
+          lastMoveRef.current = now;
+        }
         if (isLocked) {
           const scale = getVideoScale();
           sendInput({
@@ -320,7 +329,7 @@ export default function VideoDisplay({
         ref={videoRef}
         autoPlay
         playsInline
-        style={{ width: "100%", height: "100%", objectFit: "contain" }}
+        style={{ width: "100%", height: "100%", objectFit: settings.displayMode }}
       />
 
       {/* Hidden input: focusing it opens the phone's soft keyboard */}

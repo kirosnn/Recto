@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>WinDirector — Benchmark WebRTC</title>
+  <style>
+    body { font-family: monospace; background: #0a0a0a; color: #d0d0c8; margin: 0; padding: 24px; }
+    h1   { color: #d97757; font-size: 1.1rem; margin: 0 0 6px; }
+    #sub { color: #666; font-size: 0.8rem; margin-bottom: 20px; }
+    #bar-wrap { width: 360px; height: 4px; background: #222; border-radius: 2px; margin: 14px 0; }
+    #bar  { height: 100%; background: #d97757; border-radius: 2px; width: 0; transition: width 0.9s linear; }
+    #log  { color: #888; font-size: 0.82rem; min-height: 24px; }
+    pre   { color: #aaa; font-size: 0.78rem; margin-top: 20px; display: none; }
+    canvas, video { display: none; }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<video id="v" autoplay muted playsinline></video>
+<h1>WinDirector — Benchmark WebRTC</h1>
+<div id="sub">Loopback local · mesure codec, bitrate, FPS, latence encodeur</div>
+<div id="log">Initialisation…</div>
+<div id="bar-wrap"><div id="bar"></div></div>
+<pre id="out"></pre>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const P           = new URLSearchParams(location.search);
+const DURATION    = parseInt(P.get('duration')   ?? '30');
+const TARGET_KBPS = parseInt(P.get('bitrate')    ?? '20000');
+const TARGET_FPS  = parseInt(P.get('fps')        ?? '60');
+const CODEC       = P.get('codec')               ?? 'H264';
+const RES_P       = parseInt(P.get('resolution') ?? '720'); // 720 | 1080 | 1440
+
+// Canvas dimensions from resolution param
+const RES_MAP = { 720: [1280, 720], 1080: [1920, 1080], 1440: [2560, 1440] };
+const [W, H] = RES_MAP[RES_P] ?? RES_MAP[720];
+
+const canvas = document.getElementById('c');
+canvas.width  = W;
+canvas.height = H;
+
+// ── Noise region (pre-allocated, partially updated each frame) ────────────────
+// This creates incompressible content that forces the encoder to use real bits.
+const NOISE_H = Math.round(H * 0.45);   // 45% of frame height = noise zone
+const noiseBuf = new Uint8ClampedArray(W * NOISE_H * 4);
+// Pre-fill with random noise
+for (let i = 0; i < noiseBuf.length; i++) noiseBuf[i] = Math.random() * 256 | 0;
+const noiseImg = new ImageData(noiseBuf, W, NOISE_H);
+let noisePhase = 0;
+
+// Update 50% of noise pixels each frame — high entropy, fast typed-array ops
+function updateNoise() {
+  const step = 8; // update every 8th RGBA group (= 25% pixels)
+  const offset = noisePhase & 7;
+  const p = noisePhase & 0xff;
+  for (let i = offset * 4; i < noiseBuf.length; i += step * 4) {
+    // XOR with phase makes it always different but avoids Math.random() per pixel
+    noiseBuf[i]   = (noiseBuf[i]   ^ p)         & 0xff;
+    noiseBuf[i+1] = (noiseBuf[i+1] ^ (p + 85))  & 0xff;
+    noiseBuf[i+2] = (noiseBuf[i+2] ^ (p + 170)) & 0xff;
+    noiseBuf[i+3] = 255;
+  }
+  noisePhase++;
+}
+
+// ── Canvas animation ──────────────────────────────────────────────────────────
+const ctx = canvas.getContext('2d', { willReadFrequently: false });
+let frame = 0;
+
+function draw() {
+  const t = performance.now() / 1000;
+
+  // ── Upper half: animated UI-like content (compressible, realistic) ──
+  // Gradient background
+  const g = ctx.createLinearGradient(0, 0, W, H / 2);
+  g.addColorStop(0, `hsl(${(t * 22) % 360},50%,12%)`);
+  g.addColorStop(1, `hsl(${(t * 22 + 160) % 360},50%,7%)`);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H - NOISE_H);
+
+  // Moving elements (simulates UI motion: windows, cursors, animations)
+  for (let i = 0; i < 8; i++) {
+    const cx = W / 2 + Math.cos(t * 0.65 + i * 0.785) * (W * 0.3);
+    const cy = (H - NOISE_H) / 2 + Math.sin(t * 0.5 + i * 0.785) * ((H - NOISE_H) * 0.35);
+    const r  = W * 0.025 + Math.sin(t * 1.1 + i) * W * 0.01;
+    ctx.fillStyle = `hsla(${i * 45 + t * 18},72%,52%,0.8)`;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Grid (sharp edges: compression challenge for intra blocks)
+  ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 80)  { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x, H - NOISE_H); ctx.stroke(); }
+  for (let y = 0; y < H - NOISE_H; y += 80) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+  // Text (sharp pixels, worst case for encoder inter prediction)
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.font = `bold ${W * 0.022 | 0}px monospace`;
+  ctx.fillText(`WinDirector · Frame ${frame} · ${CODEC} ${RES_P}p @ ${TARGET_FPS}fps`, W * 0.02, H * 0.06);
+  ctx.font = `${W * 0.014 | 0}px monospace`;
+  ctx.fillText(new Date().toISOString(), W * 0.02, H * 0.11);
+  ctx.fillText(`Target bitrate: ${TARGET_KBPS / 1000} Mbps  Duration: ${DURATION}s`, W * 0.02, H * 0.16);
+
+  // UI mockup rectangles (sharp color boundaries = hard for encoder)
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1.5;
+  const nBoxes = Math.min(8, Math.floor(W / 180));
+  for (let i = 0; i < nBoxes; i++) {
+    ctx.strokeRect(W * 0.02 + i * (W * 0.12), (H - NOISE_H) * 0.65, W * 0.10, (H - NOISE_H) * 0.25);
+  }
+
+  // ── Lower half: pure noise (incompressible, forces encoder bitrate) ──
+  // Partially randomise noise buffer without calling Math.random() per pixel
+  updateNoise();
+  ctx.putImageData(noiseImg, 0, H - NOISE_H);
+
+  frame++;
+}
+
+// ── Use setInterval (not rAF) for consistent timing in headless Chrome ────────
+let drawTimer = null;
+function startDraw() {
+  draw(); // first frame immediately
+  drawTimer = setInterval(draw, Math.round(1000 / TARGET_FPS));
+}
+function stopDraw() {
+  if (drawTimer) { clearInterval(drawTimer); drawTimer = null; }
+}
+
+// ── SDP bandwidth helper ──────────────────────────────────────────────────────
+// Injects b=AS and b=TIAS into the video m= section of the SDP.
+// This is more reliable than setParameters in some browsers.
+function injectSdpBandwidth(sdp, kbps) {
+  const lines = sdp.split('\r\n');
+  const out = [];
+  let inVideo = false, injected = false;
+  for (const line of lines) {
+    if (line.startsWith('m=video')) { inVideo = true; injected = false; }
+    else if (line.startsWith('m='))  { inVideo = false; }
+
+    // Inject after c= line in the video section
+    if (inVideo && !injected && line.startsWith('c=')) {
+      out.push(line);
+      out.push(`b=AS:${kbps}`);
+      out.push(`b=TIAS:${kbps * 1000}`);
+      injected = true;
+      continue;
+    }
+    // Remove any existing bandwidth lines in video section to avoid duplicates
+    if (inVideo && (line.startsWith('b=AS:') || line.startsWith('b=TIAS:'))) continue;
+    out.push(line);
+  }
+  return out.join('\r\n');
+}
+
+// ── Codec preference ──────────────────────────────────────────────────────────
+function setCodecPref(pc) {
+  for (const tr of pc.getTransceivers()) {
+    if (tr.sender.track?.kind !== 'video') continue;
+    const caps = RTCRtpSender.getCapabilities('video');
+    if (!caps) continue;
+    const all = caps.codecs;
+    let sorted;
+    if (CODEC === 'H264') {
+      // Prefer High profile (0x64), then Main (0x4d), then Baseline
+      const high = all.filter(c => c.mimeType === 'video/H264' && /profile-level-id=64/i.test(c.sdpFmtpLine ?? ''));
+      const main = all.filter(c => c.mimeType === 'video/H264' && /profile-level-id=4d/i.test(c.sdpFmtpLine ?? ''));
+      const base = all.filter(c => c.mimeType === 'video/H264' && !high.includes(c) && !main.includes(c));
+      sorted = [...high, ...main, ...base, ...all.filter(c => c.mimeType !== 'video/H264')];
+    } else if (CODEC === 'VP9') {
+      sorted = [...all.filter(c => c.mimeType === 'video/VP9'), ...all.filter(c => c.mimeType !== 'video/VP9')];
+    } else if (CODEC === 'H265') {
+      sorted = [...all.filter(c => c.mimeType === 'video/H265'), ...all.filter(c => c.mimeType !== 'video/H265')];
+    } else {
+      sorted = all;
+    }
+    const f = sorted.filter(Boolean);
+    if (f.length) try { tr.setCodecPreferences(f); } catch {}
+  }
+}
+
+// ── Tune sender params ────────────────────────────────────────────────────────
+async function tuneSender(pc) {
+  const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+  if (!sender) return;
+  const params = sender.getParameters();
+  if (!params.encodings.length) params.encodings = [{}];
+  const enc = params.encodings[0];
+  enc.maxBitrate             = TARGET_KBPS * 1000;
+  enc.maxFramerate           = TARGET_FPS;
+  enc.priority               = 'high';
+  enc.networkPriority        = 'high';
+  enc.degradationPreference  = 'maintain-framerate'; // key: drop resolution not FPS
+  try { await sender.setParameters(params); } catch {}
+}
+
+// ── Stats helpers ─────────────────────────────────────────────────────────────
+const avg = a => a.length ? a.reduce((s,x)=>s+x,0)/a.length : 0;
+const mn  = a => a.length ? Math.min(...a) : 0;
+const mx  = a => a.length ? Math.max(...a) : 0;
+
+// ── Main benchmark ────────────────────────────────────────────────────────────
+async function run() {
+  startDraw();
+
+  const stream = canvas.captureStream(TARGET_FPS);
+  const pc1 = new RTCPeerConnection({ iceServers: [] }); // sender (encoder)
+  const pc2 = new RTCPeerConnection({ iceServers: [] }); // receiver (decoder)
+
+  pc1.onicecandidate = ({ candidate }) => candidate && pc2.addIceCandidate(candidate).catch(()=>{});
+  pc2.onicecandidate = ({ candidate }) => candidate && pc1.addIceCandidate(candidate).catch(()=>{});
+
+  stream.getTracks().forEach(t => pc1.addTrack(t, stream));
+  pc2.ontrack = ({ streams }) => { document.getElementById('v').srcObject = streams[0]; };
+
+  // Set codec preference BEFORE offer so it lands in the SDP
+  setCodecPref(pc1);
+
+  const rawOffer = await pc1.createOffer();
+  // Inject SDP bandwidth constraint for more reliable bitrate control
+  const sdpWithBw = injectSdpBandwidth(rawOffer.sdp, TARGET_KBPS);
+  const offer = new RTCSessionDescription({ type: 'offer', sdp: sdpWithBw });
+
+  await pc1.setLocalDescription(offer);
+  await pc2.setRemoteDescription(offer);
+
+  const rawAnswer = await pc2.createAnswer();
+  const answerSdp = injectSdpBandwidth(rawAnswer.sdp, TARGET_KBPS);
+  const answer = new RTCSessionDescription({ type: 'answer', sdp: answerSdp });
+
+  await pc2.setLocalDescription(answer);
+  await pc1.setRemoteDescription(answer);
+
+  // Wait for ICE connection
+  await new Promise(res => {
+    const check = () =>
+      ['connected','completed'].includes(pc1.iceConnectionState) ? res() : setTimeout(check, 80);
+    check();
+  });
+
+  // Give the encoder a moment to stabilise before tuning
+  await new Promise(r => setTimeout(r, 300));
+  await tuneSender(pc1);
+
+  document.getElementById('log').textContent = `Connexion OK — collecte des stats (${W}×${H})…`;
+
+  // ── Stats collection ──────────────────────────────────────────────────────
+  const bitrates=[], fpsSend=[], fpsRecv=[], rtts=[], jitters=[], decodeTimes=[];
+  let pktLost=0, pktTotal=0;
+  let codec='unknown', resolution='unknown', encoderImpl='unknown', qualityLimit='none';
+  let prevOut=null, prevIn=null;
+
+  return new Promise(resolve => {
+    let elapsed = 0;
+    const tick = setInterval(async () => {
+      elapsed++;
+      const pct = Math.min(100, (elapsed / DURATION) * 100);
+      document.getElementById('bar').style.width = pct + '%';
+      document.getElementById('log').textContent =
+        `Bench ${elapsed}s/${DURATION}s (${Math.round(pct)}%)  résolution: ${resolution}  codec: ${codec.split(' ')[0]}`;
+      console.log(`Bench ${elapsed}/${DURATION}s`);
+
+      // Sender stats
+      const s1 = await pc1.getStats();
+      let outRtp=null, remIn=null;
+      s1.forEach(s => {
+        if (s.type === 'outbound-rtp' && s.kind === 'video')       outRtp = s;
+        if (s.type === 'remote-inbound-rtp' && s.kind === 'video') remIn  = s;
+        if (s.type === 'codec' && s.mimeType?.startsWith('video/')) {
+          const fmtp = s.sdpFmtpLine ?? '';
+          const m = fmtp.match(/profile-level-id=([0-9a-fA-F]{6})/i);
+          const prof = m ? (parseInt(m[1].slice(0,2),16)===0x64?' High':parseInt(m[1].slice(0,2),16)===0x4d?' Main':' Baseline') : '';
+          codec = s.mimeType + prof;
+        }
+      });
+
+      if (outRtp) {
+        if (outRtp.encoderImplementation) encoderImpl = outRtp.encoderImplementation;
+        if (outRtp.qualityLimitationReason) qualityLimit = outRtp.qualityLimitationReason;
+        if (outRtp.frameWidth && outRtp.frameHeight) resolution = `${outRtp.frameWidth}×${outRtp.frameHeight}`;
+        if (outRtp.framesPerSecond) fpsSend.push(outRtp.framesPerSecond);
+        if (prevOut) {
+          const kb = ((outRtp.bytesSent||0) - (prevOut.bytesSent||0)) * 8 / 1000;
+          if (kb > 0) bitrates.push(kb);
+        }
+        prevOut = outRtp;
+      }
+      if (remIn) {
+        if (remIn.roundTripTime) rtts.push(remIn.roundTripTime * 1000);
+        if (remIn.jitter)        jitters.push(remIn.jitter * 1000);
+      }
+
+      // Receiver stats
+      const s2 = await pc2.getStats();
+      let inRtp=null;
+      s2.forEach(s => { if (s.type === 'inbound-rtp' && s.kind === 'video') inRtp = s; });
+      if (inRtp) {
+        if (inRtp.framesPerSecond) fpsRecv.push(inRtp.framesPerSecond);
+        if (prevIn) {
+          const lost = (inRtp.packetsLost||0) - (prevIn.packetsLost||0);
+          const recv = (inRtp.packetsReceived||0) - (prevIn.packetsReceived||0);
+          pktLost += Math.max(0, lost);
+          pktTotal += lost + recv;
+        }
+        if (inRtp.totalDecodeTime && inRtp.framesDecoded > 0)
+          decodeTimes.push((inRtp.totalDecodeTime / inRtp.framesDecoded) * 1000);
+        prevIn = inRtp;
+      }
+
+      if (elapsed >= DURATION) {
+        clearInterval(tick);
+        stopDraw();
+        pc1.close(); pc2.close();
+
+        const results = {
+          config: { codec: CODEC, targetBitrateKbps: TARGET_KBPS, targetFps: TARGET_FPS,
+                    durationSec: DURATION, resolution: `${W}×${H}` },
+          codec, resolution, encoderImpl,
+          bitrate: { avgKbps: avg(bitrates), minKbps: mn(bitrates), maxKbps: mx(bitrates) },
+          fps:     { avgSend: avg(fpsSend), minSend: mn(fpsSend), avgRecv: avg(fpsRecv) },
+          rtt:     { avgMs: avg(rtts) },
+          jitter:  { avgMs: avg(jitters) },
+          decodeTime: { avgMs: avg(decodeTimes) },
+          packetLossRate: pktTotal > 0 ? pktLost / pktTotal : 0,
+          qualityLimitation: qualityLimit,
+        };
+
+        document.getElementById('out').style.display = 'block';
+        document.getElementById('out').textContent = JSON.stringify(results, null, 2);
+        document.getElementById('log').textContent = 'Terminé.';
+
+        if (typeof window.__benchDone === 'function') window.__benchDone(results);
+        resolve(results);
+      }
+    }, 1000);
+  });
+}
+
+window.addEventListener('load', () => {
+  run().catch(e => {
+    document.getElementById('log').textContent = 'Erreur: ' + e.message;
+    console.error(e);
+    if (typeof window.__benchDone === 'function') window.__benchDone({ error: e.message });
+  });
+});
+</script>
+</body>
+</html>

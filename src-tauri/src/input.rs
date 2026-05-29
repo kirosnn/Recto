@@ -10,6 +10,16 @@ pub enum InputEvent {
     MouseWheel { delta_x: f64, delta_y: f64 },
     KeyDown { code: String, modifiers: Modifiers },
     KeyUp { code: String, modifiers: Modifiers },
+    GamepadState {
+        a: bool, b: bool, x: bool, y: bool,
+        lb: bool, rb: bool,
+        lt: f32, rt: f32,
+        back: bool, start: bool,
+        ls: bool, rs: bool,
+        dpad_up: bool, dpad_down: bool, dpad_left: bool, dpad_right: bool,
+        left_x: f32, left_y: f32,
+        right_x: f32, right_y: f32,
+    },
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -199,6 +209,42 @@ pub fn inject(event: InputEvent) -> anyhow::Result<()> {
                     SendInput(&[input], std::mem::size_of::<INPUT>() as i32);
                     send_modifiers_up(&modifiers);
                 }
+            }
+            InputEvent::GamepadState {
+                a, b, x, y, lb, rb, lt, rt,
+                back, start, ls, rs,
+                dpad_up, dpad_down, dpad_left, dpad_right,
+                left_x, left_y, right_x, right_y,
+            } => {
+                use vigem_client::{XButtons, XGamepad};
+                let mut raw: u16 = 0;
+                if a          { raw |= XButtons::A; }
+                if b          { raw |= XButtons::B; }
+                if x          { raw |= XButtons::X; }
+                if y          { raw |= XButtons::Y; }
+                if lb         { raw |= XButtons::LB; }
+                if rb         { raw |= XButtons::RB; }
+                if back       { raw |= XButtons::BACK; }
+                if start      { raw |= XButtons::START; }
+                if ls         { raw |= XButtons::LTHUMB; }
+                if rs         { raw |= XButtons::RTHUMB; }
+                if dpad_up    { raw |= XButtons::UP; }
+                if dpad_down  { raw |= XButtons::DOWN; }
+                if dpad_left  { raw |= XButtons::LEFT; }
+                if dpad_right { raw |= XButtons::RIGHT; }
+                let btns = XButtons { raw };
+                let report = XGamepad {
+                    buttons:       btns,
+                    left_trigger:  (lt.clamp(0.0, 1.0) * 255.0) as u8,
+                    right_trigger: (rt.clamp(0.0, 1.0) * 255.0) as u8,
+                    // XInput Y-axis is inverted vs Web Gamepad API
+                    thumb_lx: (left_x.clamp(-1.0, 1.0) * 32767.0) as i16,
+                    thumb_ly: (-(left_y.clamp(-1.0, 1.0)) * 32767.0) as i16,
+                    thumb_rx: (right_x.clamp(-1.0, 1.0) * 32767.0) as i16,
+                    thumb_ry: (-(right_y.clamp(-1.0, 1.0)) * 32767.0) as i16,
+                };
+                // Silently ignore if ViGEm Bus is not installed.
+                let _ = crate::gamepad::update(report);
             }
         }
     }

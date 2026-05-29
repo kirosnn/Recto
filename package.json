@@ -11,7 +11,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "bench": "cd bench && node index.mjs",
+    "bench:quick": "cd bench && node index.mjs --quick",
+    "bench:setup": "cd bench && npm install && npm run setup"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.0",

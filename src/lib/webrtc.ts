@@ -6,6 +6,7 @@ import {
   submitAnswer,
   subscribeToSession,
 } from "./signaling";
+import { StreamSettings, DEFAULTS } from "./settings";
 
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
@@ -27,33 +28,95 @@ function waitForIceGathering(pc: RTCPeerConnection, timeoutMs = 8000): Promise<v
   });
 }
 
-// Prefer H.264 for hardware-accelerated encoding, then VP9, then others
-function setH264Preference(pc: RTCPeerConnection) {
+type CodecCap = { mimeType: string; sdpFmtpLine?: string };
+
+// Returns true for H264 codecs using High (0x64) or Main (0x4d) profile.
+// These profiles are the ones browsers map to hardware encoders (NVENC/AMF/QSV).
+function isHwFriendlyH264(c: CodecCap): boolean {
+  const m = c.sdpFmtpLine?.match(/profile-level-id=([0-9a-fA-F]{6})/i);
+  if (!m) return false;
+  const profile = parseInt(m[1].slice(0, 2), 16);
+  return profile === 0x64 || profile === 0x4d; // High or Main
+}
+
+function setCodecPreference(pc: RTCPeerConnection, codec: StreamSettings["codec"]) {
   for (const transceiver of pc.getTransceivers()) {
     if (transceiver.sender.track?.kind !== "video") continue;
     const caps = RTCRtpSender.getCapabilities("video");
     if (!caps) continue;
-    const sorted = [
-      ...caps.codecs.filter((c) => c.mimeType === "video/H264"),
-      ...caps.codecs.filter((c) => c.mimeType === "video/VP9"),
-      ...caps.codecs.filter(
-        (c) => c.mimeType !== "video/H264" && c.mimeType !== "video/VP9"
-      ),
-    ];
-    try { transceiver.setCodecPreferences(sorted); } catch {}
+    const all = caps.codecs;
+
+    const h264hw  = all.filter(c => c.mimeType === "video/H264" && isHwFriendlyH264(c));
+    const h264sw  = all.filter(c => c.mimeType === "video/H264" && !isHwFriendlyH264(c));
+    const h265    = all.filter(c => c.mimeType === "video/H265");
+    const av1     = all.filter(c => c.mimeType === "video/AV1");
+    const vp9     = all.filter(c => c.mimeType === "video/VP9");
+    const rest    = all.filter(c =>
+      !["video/H264", "video/H265", "video/AV1", "video/VP9"].includes(c.mimeType)
+    );
+
+    let sorted: typeof all;
+    switch (codec) {
+      case "H264":
+        // Hardware-friendly High/Main profile first, then Baseline, then others
+        sorted = [...h264hw, ...h264sw, ...vp9, ...av1, ...h265, ...rest];
+        break;
+      case "H265":
+        sorted = [...h265, ...h264hw, ...h264sw, ...av1, ...vp9, ...rest];
+        break;
+      case "AV1":
+        sorted = [...av1, ...h264hw, ...h265, ...h264sw, ...vp9, ...rest];
+        break;
+      case "VP9":
+        sorted = [...vp9, ...h264hw, ...h264sw, ...av1, ...h265, ...rest];
+        break;
+      case "auto":
+        // Prefer hardware-friendly order: H265 > AV1 > H264-HW > VP9
+        sorted = [...h265, ...av1, ...h264hw, ...h264sw, ...vp9, ...rest];
+        break;
+      default:
+        sorted = all;
+    }
+
+    // Filter out empty lists to avoid passing empty codec arrays
+    const filtered = sorted.filter(Boolean);
+    if (filtered.length > 0) {
+      try { transceiver.setCodecPreferences(filtered); } catch {}
+    }
   }
 }
 
-// Tune video sender for low-latency after ICE connects
-async function tuneVideoSender(pc: RTCPeerConnection) {
+async function tuneVideoSender(pc: RTCPeerConnection, settings: StreamSettings) {
   const sender = pc.getSenders().find((s) => s.track?.kind === "video");
   if (!sender) return;
   try {
     const params = sender.getParameters();
     if (!params.encodings.length) params.encodings = [{}];
-    params.encodings[0].maxFramerate = 60;
+    const enc = params.encodings[0];
+    enc.maxFramerate = settings.targetFps;
+    if (settings.maxBitrateKbps !== null) {
+      enc.maxBitrate = settings.maxBitrateKbps * 1000;
+    } else {
+      delete enc.maxBitrate;
+    }
+    // When bandwidth is constrained: reduce resolution, not FPS.
+    // FPS drops feel much worse than a slight blur.
+    (enc as Record<string, unknown>).degradationPreference = "maintain-framerate";
+    (enc as Record<string, unknown>).priority = "high";
+    (enc as Record<string, unknown>).networkPriority = "high";
+    // L1T1 = no scalability layers → single-quality, lowest latency
+    (enc as Record<string, unknown>).scalabilityMode = "L1T1";
     await sender.setParameters(params);
   } catch {}
+}
+
+// Apply screen-share content hint so the encoder favours sharpness over motion
+function applyContentHint(stream: MediaStream) {
+  for (const track of stream.getVideoTracks()) {
+    try {
+      (track as MediaStreamTrack & { contentHint: string }).contentHint = "detail";
+    } catch {}
+  }
 }
 
 export type RectoCallbacks = {
@@ -65,6 +128,14 @@ export type RectoCallbacks = {
 
 export type PeerIdentity = { name: string; avatar: string | null };
 
+export type HwEncoderCaps = {
+  gpuName: string;
+  vendor: string;
+  nvenc: boolean;
+  amf: boolean;
+  qsv: boolean;
+};
+
 export type VersoCallbacks = {
   onStream: (stream: MediaStream) => void;
   onConnected: () => void;
@@ -73,6 +144,7 @@ export type VersoCallbacks = {
   onInputChannel: (channel: RTCDataChannel) => void;
   onDisplayInfo: (width: number, height: number) => void;
   onIdentity: (identity: PeerIdentity) => void;
+  onHwCaps?: (caps: HwEncoderCaps) => void;
 };
 
 export class RectoConnection {
@@ -81,11 +153,8 @@ export class RectoConnection {
   private inputChannel: RTCDataChannel | null = null;
   public code = "";
 
-  constructor(private cb: RectoCallbacks) {
+  constructor(private cb: RectoCallbacks, private settings: StreamSettings = DEFAULTS) {
     this.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-    // Unreliable unordered for mouse moves; reliable events like clicks still
-    // reach Recto because TCP-like fallback is not used — SCTP partial reliability
-    // means each message still delivers, just without head-of-line blocking
     this.inputChannel = this.pc.createDataChannel("input", {
       ordered: false,
       maxRetransmits: 0,
@@ -97,7 +166,9 @@ export class RectoConnection {
         this.pc.iceConnectionState === "completed"
       ) {
         this.cb.onConnected();
-        tuneVideoSender(this.pc);
+        // Small delay: let the DTLS/SRTP handshake complete and the first
+        // encoder params be populated before we try to override them.
+        setTimeout(() => tuneVideoSender(this.pc, this.settings), 250);
       }
       if (
         this.pc.iceConnectionState === "disconnected" ||
@@ -109,10 +180,20 @@ export class RectoConnection {
     };
   }
 
+  async applySettings(settings: StreamSettings) {
+    this.settings = settings;
+    if (
+      this.pc.iceConnectionState === "connected" ||
+      this.pc.iceConnectionState === "completed"
+    ) {
+      await tuneVideoSender(this.pc, settings);
+    }
+  }
+
   async start(stream: MediaStream) {
+    applyContentHint(stream);
     stream.getTracks().forEach((t) => this.pc.addTrack(t, stream));
-    // Set H.264 preference after tracks are added, before offer
-    setH264Preference(this.pc);
+    setCodecPreference(this.pc, this.settings.codec);
 
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
@@ -168,7 +249,6 @@ export class VersoConnection {
       if (e.channel.label !== "input") return;
       const ch = e.channel;
 
-      // Handle metadata messages sent from Recto → Verso
       ch.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data as string);
@@ -176,11 +256,18 @@ export class VersoConnection {
             this.cb.onDisplayInfo(data.width, data.height);
           } else if (data.type === "identity") {
             this.cb.onIdentity({ name: data.name, avatar: data.avatar ?? null });
+          } else if (data.type === "hwCaps" && this.cb.onHwCaps) {
+            this.cb.onHwCaps({
+              gpuName: data.gpuName ?? "",
+              vendor: data.vendor ?? "unknown",
+              nvenc: !!data.nvenc,
+              amf: !!data.amf,
+              qsv: !!data.qsv,
+            });
           }
         } catch {}
       };
 
-      // Expose channel for sending only once it is actually open
       if (ch.readyState === "open") {
         this.cb.onInputChannel(ch);
       } else {
@@ -216,6 +303,10 @@ export class VersoConnection {
     const completeAnswer = this.pc.localDescription!;
 
     await submitAnswer(code, completeAnswer);
+  }
+
+  getStats(): Promise<RTCStatsReport> {
+    return this.pc.getStats();
   }
 
   stop() {

@@ -1,8 +1,9 @@
-import { createContext, useContext, useRef, useState, useCallback } from "react";
+import { createContext, useContext, useRef, useState, useCallback, useEffect } from "react";
 import { RectoConnection } from "../lib/webrtc";
 import { endSession } from "../lib/signaling";
 import { identityFromUser } from "../lib/identity";
 import { useAuth } from "./useAuth";
+import { useSettings } from "./SettingsContext";
 import { invoke } from "@tauri-apps/api/core";
 
 export type SessionStatus = "idle" | "selecting" | "waiting" | "connected" | "error";
@@ -68,6 +69,7 @@ export function useRectoSession() { return useContext(RectoSessionCtx); }
 
 export function RectoSessionProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const { settings } = useSettings();
   const [status, setStatus] = useState<SessionStatus>("idle");
   const [code, setCode] = useState("");
   const [duration, setDuration] = useState(0);
@@ -78,6 +80,10 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
   const conn = useRef<RectoConnection | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastInputRef = useRef<InputDebug>({ summary: "", count: 0 });
+
+  // Re-apply encoding parameters whenever settings change mid-session
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { conn.current?.applySettings(settings); }, [settings]);
 
   const stop = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -91,10 +97,26 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
     setStatus("selecting");
     setError("");
     try {
+      const videoConstraints: MediaTrackConstraints & { cursor?: string } = {
+        frameRate: { ideal: settings.targetFps, max: settings.targetFps },
+        cursor: "always",
+      };
+      if (settings.resolution !== "native") {
+        const resMap: Record<string, number> = { "1080p": 1080, "1440p": 1440, "4K": 2160 };
+        const h = resMap[settings.resolution];
+        if (h) videoConstraints.height = { ideal: h, max: h };
+      }
+
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: 60, cursor: "always" } as MediaTrackConstraints,
-        audio: true,
+        video: videoConstraints as MediaTrackConstraints,
+        audio: settings.audioEnabled,
       });
+
+      // Screen content hint: "detail" preserves sharpness over motion, which
+      // lets the browser encoder (NVENC/AMF/QSV) optimise for text and UI.
+      for (const t of stream.getVideoTracks()) {
+        try { (t as MediaStreamTrack & { contentHint: string }).contentHint = "detail"; } catch {}
+      }
 
       stream.getVideoTracks()[0].onended = () => stop();
 
@@ -106,7 +128,7 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
         },
         onDisconnected: () => stop(),
         onError: (e) => { setError(e); setStatus("error"); },
-      });
+      }, settings);
 
       const inputCh = conn.current.getInputChannel();
       if (inputCh) {
@@ -137,13 +159,27 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
           } catch (err) {
             console.error("[Recto] get_displays failed:", err);
           }
+
+          // Send hardware encoder capabilities so Verso can show them in the stats overlay
+          try {
+            const caps = await invoke<{ gpuName: string; vendor: string; nvenc: boolean; amf: boolean; qsv: boolean }>(
+              "get_hw_encoder_caps"
+            );
+            const sendCaps = () => {
+              if (inputCh.readyState === "open") {
+                inputCh.send(JSON.stringify({ type: "hwCaps", ...caps }));
+              }
+            };
+            sendCaps();
+            setTimeout(sendCaps, 600);
+          } catch {}
         };
 
         inputCh.onmessage = async (e) => {
           try {
             const event = JSON.parse(e.data as string);
-            // displayInfo is Recto→Verso only; skip if Verso somehow echoes it
-            if (event.type === "displayInfo") return;
+            // Recto→Verso-only messages; ignore if echoed back
+            if (event.type === "displayInfo" || event.type === "hwCaps") return;
             // Verso announces who it is — show it in the UI, don't inject it
             if (event.type === "identity") {
               setPeer({ name: event.name, avatar: event.avatar ?? null });

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { VersoConnection, type PeerIdentity } from "../lib/webrtc";
+import { VersoConnection, type PeerIdentity, type HwEncoderCaps } from "../lib/webrtc";
 import { useAuth } from "../context/useAuth";
 import { identityFromUser } from "../lib/identity";
 import VideoDisplay from "../components/VideoDisplay";
@@ -27,6 +27,7 @@ export default function VersoPage() {
   const [peer, setPeer] = useState<PeerIdentity | null>(null);
   // Ctrl+Alt+H hides the on-video overlays for an immersive view
   const [hideUI, setHideUI] = useState(false);
+  const [hwCaps, setHwCaps] = useState<HwEncoderCaps | null>(null);
   const conn = useRef<VersoConnection | null>(null);
 
   const handleConnect = async () => {
@@ -47,6 +48,7 @@ export default function VersoPage() {
         setInputChannel(null);
         setPeer(null);
         setHideUI(false);
+        setHwCaps(null);
         setFullscreen(false);
       },
       onError: (e) => {
@@ -58,6 +60,7 @@ export default function VersoPage() {
       onInputChannel: (ch) => setInputChannel(ch),
       onDisplayInfo: (w, h) => setHostSize({ w, h }),
       onIdentity: (id) => setPeer(id),
+      onHwCaps: (caps) => setHwCaps(caps),
     });
 
     try {
@@ -78,6 +81,7 @@ export default function VersoPage() {
     setPeer(null);
     setCode("");
     setHideUI(false);
+    setHwCaps(null);
     setFullscreen(false);
   };
 
@@ -125,6 +129,8 @@ export default function VersoPage() {
           hostHeight={hostSize.h}
           hideUI={hideUI}
           onToggleUI={() => setHideUI((v) => !v)}
+          getStats={() => conn.current?.getStats() ?? Promise.resolve(new Map() as unknown as RTCStatsReport)}
+          hwCaps={hwCaps}
         />
         {peer && !hideUI && (
           <PeerBadge

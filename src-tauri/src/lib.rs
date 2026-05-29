@@ -1,4 +1,6 @@
 mod input;
+mod gamepad;
+mod hw_encoder;
 
 use tauri::{Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -36,6 +38,16 @@ async fn maximize_window(window: tauri::Window) {
 #[tauri::command]
 async fn close_window(window: tauri::Window) {
     let _ = window.close();
+}
+
+#[tauri::command]
+async fn gamepad_disconnect() {
+    gamepad::disconnect();
+}
+
+#[tauri::command]
+async fn get_hw_encoder_caps() -> hw_encoder::HwEncoderCaps {
+    hw_encoder::detect()
 }
 
 #[tauri::command]
@@ -105,6 +117,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             inject_input,
             get_displays,
+            gamepad_disconnect,
+            get_hw_encoder_caps,
             set_window_title,
             minimize_window,
             maximize_window,

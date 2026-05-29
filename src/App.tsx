@@ -2,10 +2,12 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext";
 import { AuthProvider } from "./context/AuthContext";
 import { useAuth } from "./context/useAuth";
+import { SettingsProvider } from "./context/SettingsContext";
 import { RectoSessionProvider } from "./context/RectoSessionContext";
 import Home from "./pages/Home";
 import RectoPage from "./pages/RectoPage";
 import VersoPage from "./pages/VersoPage";
+import SettingsPage from "./pages/SettingsPage";
 import LoginPage from "./pages/LoginPage";
 import AuthCallback from "./pages/AuthCallback";
 
@@ -32,6 +34,7 @@ function AppRoutes() {
       <Route path="/" element={<Protected><Home /></Protected>} />
       <Route path="/recto" element={<Protected><RectoPage /></Protected>} />
       <Route path="/verso" element={<Protected><VersoPage /></Protected>} />
+      <Route path="/settings" element={<Protected><SettingsPage /></Protected>} />
     </Routes>
   );
 }
@@ -40,13 +43,15 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <RectoSessionProvider>
-          <div className="app-root">
-            <main className="app-main">
-              <AppRoutes />
-            </main>
-          </div>
-        </RectoSessionProvider>
+        <SettingsProvider>
+          <RectoSessionProvider>
+            <div className="app-root">
+              <main className="app-main">
+                <AppRoutes />
+              </main>
+            </div>
+          </RectoSessionProvider>
+        </SettingsProvider>
       </AuthProvider>
     </ThemeProvider>
   );
