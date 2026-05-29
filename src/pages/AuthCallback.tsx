@@ -7,17 +7,16 @@ export default function AuthCallback() {
 
   useEffect(() => {
     const handle = async () => {
-      // Supabase PKCE flow → ?code=...
       const params = new URLSearchParams(window.location.search);
       const code = params.get("code");
 
       if (code) {
         await supabase.auth.exchangeCodeForSession(code);
       } else {
-        // Implicit flow → #access_token=...
         const hash = new URLSearchParams(window.location.hash.slice(1));
-        const access_token  = hash.get("access_token");
-        const refresh_token = hash.get("refresh_token");
+        const query = new URLSearchParams(window.location.search);
+        const access_token  = hash.get("access_token") ?? query.get("access_token");
+        const refresh_token = hash.get("refresh_token") ?? query.get("refresh_token");
         if (access_token && refresh_token) {
           await supabase.auth.setSession({ access_token, refresh_token });
         }
