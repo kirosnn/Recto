@@ -18,6 +18,14 @@ const themeScript = `(function(){try{var t=localStorage.getItem("theme")||"dark"
 export const metadata: Metadata = {
   title: "Recto",
   description: "Partage d'écran P2P serverless — de PC à PC, sans serveur.",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.png",    type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/icon.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
