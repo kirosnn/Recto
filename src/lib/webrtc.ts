@@ -63,6 +63,8 @@ export type RectoCallbacks = {
   onError: (err: string) => void;
 };
 
+export type PeerIdentity = { name: string; avatar: string | null };
+
 export type VersoCallbacks = {
   onStream: (stream: MediaStream) => void;
   onConnected: () => void;
@@ -70,6 +72,7 @@ export type VersoCallbacks = {
   onError: (err: string) => void;
   onInputChannel: (channel: RTCDataChannel) => void;
   onDisplayInfo: (width: number, height: number) => void;
+  onIdentity: (identity: PeerIdentity) => void;
 };
 
 export class RectoConnection {
@@ -171,6 +174,8 @@ export class VersoConnection {
           const data = JSON.parse(event.data as string);
           if (data.type === "displayInfo") {
             this.cb.onDisplayInfo(data.width, data.height);
+          } else if (data.type === "identity") {
+            this.cb.onIdentity({ name: data.name, avatar: data.avatar ?? null });
           }
         } catch {}
       };
