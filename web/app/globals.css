@@ -132,10 +132,28 @@ html[data-theme="dark"] body {
    ═══════════════════════════════════════════════════════════ */
 
 .main-page {
+    position: relative;
     min-height: 100vh;
     width: 100%;
     padding: clamp(16px, 2.4vw, 32px);
     background-color: #fafafa;
+    overflow-x: hidden;
+}
+
+.main-bg-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 600px;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+}
+
+.main-bg-image {
+    width: 100%;
+    height: 100%;
     background-image: 
         linear-gradient(to bottom, rgba(250, 250, 250, 0) 0%, #fafafa 100%),
         url('/assets/bg.png');
@@ -630,12 +648,12 @@ html[data-theme="dark"] .back-btn:hover {
 
 html[data-theme="dark"] .main-page {
     background-color: #000000;
+}
+
+html[data-theme="dark"] .main-bg-image {
     background-image: 
         linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, #000000 100%),
         url('/assets/bg.png');
-    background-size: cover;
-    background-position: top center;
-    background-repeat: no-repeat;
 }
 html[data-theme="dark"] .main-intro {
     color: #ffffff;

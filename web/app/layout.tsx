@@ -33,6 +33,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="fr" data-theme="dark" className={`${geistSans.variable} ${geistMono.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {/* Legacy iOS tag (Next only emits mobile-web-app-capable) — needed for
+            standalone/fullscreen launch from the home screen on iPhone */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
       </head>
       <body>
         <ThemeProvider>{children}</ThemeProvider>

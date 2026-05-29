@@ -157,15 +157,26 @@ export default function MainContent({ user }: { user: User }) {
 
   return (
     <div className="main-page">
+      <div className="main-bg-container">
+        <motion.div
+          className="main-bg-image"
+          initial={{ opacity: 0, scale: 1.1, y: -20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{
+            duration: 1.6,
+            ease: [0.16, 1, 0.3, 1],
+          }}
+        />
+      </div>
 
       <motion.header
         className="main-header"
-        initial={{ opacity: 0, y: -20, filter: "blur(10px)" }}
-        animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+        initial={{ opacity: 0, y: -30, scale: 0.85, filter: "blur(12px)" }}
+        animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
         transition={{
-          duration: 0.8,
+          duration: 1.2,
           ease: [0.16, 1, 0.3, 1],
-          delay: 0.1,
+          delay: 0.15,
         }}
       >
         <Image
