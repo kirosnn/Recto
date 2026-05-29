@@ -23,6 +23,13 @@ html {
     scroll-behavior: smooth;
 }
 
+html.main-page-scroll-locked,
+html.main-page-scroll-locked body {
+    overflow: hidden;
+    overscroll-behavior: none;
+    scroll-behavior: auto;
+}
+
 body {
     min-width: 320px;
     background: #f6f4ef;
