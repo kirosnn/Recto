@@ -9,11 +9,23 @@ export default function LoginButton({ next }: { next?: string }) {
 
   const handleLogin = async () => {
     setLoading(true);
-    const supabase = createClient();
-    const redirectTo =
-      `${window.location.origin}/auth/callback` +
-      (next ? `?next=${encodeURIComponent(next)}` : "");
-    await supabase.auth.signInWithOAuth({ provider: "discord", options: { redirectTo } });
+    try {
+      const supabase = createClient();
+      if (next) {
+        document.cookie = `recto-next=${encodeURIComponent(next)}; Path=/; Max-Age=300; SameSite=Lax`;
+      }
+
+      const redirectTo = `${window.location.origin}/auth/callback`;
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "discord",
+        options: { redirectTo, skipBrowserRedirect: true },
+      });
+
+      if (error) throw error;
+      if (data.url) window.location.assign(data.url);
+    } catch {
+      setLoading(false);
+    }
   };
 
   return (
