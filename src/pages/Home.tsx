@@ -14,13 +14,14 @@ export default function Home() {
       {/* Logo + titre */}
       <div style={{ textAlign: "center" }}>
         <img
-          src="/assets/desktop-computer_1f5a5-fe0f.png"
+          src="/assets/logo.png"
           alt="Recto"
           style={{
-            width: 60,
-            height: 60,
+            width: 64,
+            height: 64,
             margin: "0 auto 14px",
             display: "block",
+            objectFit: "contain",
           }}
         />
         <h1

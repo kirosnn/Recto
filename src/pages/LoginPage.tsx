@@ -52,9 +52,9 @@ export default function LoginPage() {
 
       <div style={{ textAlign: "center" }}>
         <img
-          src="/assets/desktop-computer_1f5a5-fe0f.png"
+          src="/assets/logo.png"
           alt="Recto"
-          style={{ width: 56, height: 56, margin: "0 auto 16px", display: "block" }}
+          style={{ width: 60, height: 60, margin: "0 auto 16px", display: "block", objectFit: "contain" }}
         />
         <h1 className="serif" style={{
           fontSize: "clamp(1.6rem, 3vw, 2.2rem)",

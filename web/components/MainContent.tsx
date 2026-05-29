@@ -160,10 +160,10 @@ export default function MainContent({ user }: { user: User }) {
 
       <header className="main-header">
         <Image
-          src="/assets/desktop-computer.png"
+          src="/assets/logo.png"
           alt="Recto"
-          width={72}
-          height={72}
+          width={80}
+          height={80}
           className="main-logo"
           priority
           unoptimized
