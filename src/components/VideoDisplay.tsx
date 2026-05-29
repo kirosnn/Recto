@@ -5,6 +5,8 @@ interface VideoDisplayProps {
   inputChannel: RTCDataChannel | null;
   hostWidth: number;
   hostHeight: number;
+  hideUI: boolean;
+  onToggleUI: () => void;
 }
 
 export default function VideoDisplay({
@@ -12,6 +14,8 @@ export default function VideoDisplay({
   inputChannel,
   hostWidth,
   hostHeight,
+  hideUI,
+  onToggleUI,
 }: VideoDisplayProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -138,6 +142,12 @@ export default function VideoDisplay({
       onKeyDown={(e) => {
         // Escape exits pointer lock natively; don't intercept it
         if (e.code === "Escape") return;
+        // Ctrl+Alt+H toggles the local overlays — handled here, never forwarded
+        if (e.ctrlKey && e.altKey && e.code === "KeyH") {
+          e.preventDefault();
+          onToggleUI();
+          return;
+        }
         e.preventDefault();
         sendInput({
           type: "keyDown",
@@ -152,6 +162,7 @@ export default function VideoDisplay({
       }}
       onKeyUp={(e) => {
         if (e.code === "Escape") return;
+        if (e.ctrlKey && e.altKey && e.code === "KeyH") { e.preventDefault(); return; }
         e.preventDefault();
         sendInput({
           type: "keyUp",
@@ -183,7 +194,7 @@ export default function VideoDisplay({
         </div>
       )}
 
-      {stream && !isLocked && (
+      {stream && !isLocked && !hideUI && (
         <div
           className="absolute inset-0 flex items-center justify-center"
           style={{ pointerEvents: "none" }}
@@ -199,7 +210,7 @@ export default function VideoDisplay({
               border: "1px solid rgba(255,255,255,0.1)",
             }}
           >
-            Cliquer pour capturer la souris · Échap pour libérer
+            Cliquer pour capturer la souris · Échap pour libérer · Ctrl+Alt+H pour masquer
           </div>
         </div>
       )}
