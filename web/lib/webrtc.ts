@@ -40,16 +40,20 @@ export class WebVersoConnection {
     const answer = await this.pc.createAnswer();
     await this.pc.setLocalDescription(answer);
 
-    this.iceChannel = subscribeToIce(session.id, async (candidate) => {
-      try {
-        await this.pc.addIceCandidate(candidate);
-      } catch {}
-    });
-
+    const pending: RTCIceCandidateInit[] = [];
     this.pc.onicecandidate = ({ candidate }) => {
-      if (candidate && this.iceChannel) {
-        sendClientIce(this.iceChannel, candidate.toJSON());
-      }
+      if (candidate) pending.push(candidate.toJSON());
+    };
+
+    const { channel, ready } = subscribeToIce(session.id, async (candidate) => {
+      try { await this.pc.addIceCandidate(candidate); } catch {}
+    });
+    this.iceChannel = channel;
+
+    await ready;
+    for (const c of pending) sendClientIce(channel, c);
+    this.pc.onicecandidate = ({ candidate }) => {
+      if (candidate && this.iceChannel) sendClientIce(this.iceChannel, candidate.toJSON());
     };
 
     await submitAnswer(code, answer);

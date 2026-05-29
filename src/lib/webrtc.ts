@@ -63,14 +63,21 @@ export class RectoConnection {
 
     const session = await fetchSession(this.code);
 
-    this.iceChannel = subscribeToIce(session.id, "host", async (candidate) => {
+    // Buffer candidates until the Realtime WebSocket is connected
+    const pending: RTCIceCandidateInit[] = [];
+    this.pc.onicecandidate = ({ candidate }) => {
+      if (candidate) pending.push(candidate.toJSON());
+    };
+
+    const { channel, ready } = subscribeToIce(session.id, "host", async (candidate) => {
       try { await this.pc.addIceCandidate(candidate); } catch {}
     });
+    this.iceChannel = channel;
 
+    await ready;
+    for (const c of pending) sendIceCandidate(channel, "host", c);
     this.pc.onicecandidate = ({ candidate }) => {
-      if (candidate && this.iceChannel) {
-        sendIceCandidate(this.iceChannel, "host", candidate.toJSON());
-      }
+      if (candidate && this.iceChannel) sendIceCandidate(this.iceChannel, "host", candidate.toJSON());
     };
 
     this.sessionChannel = subscribeToSession(session.id, async (update) => {
@@ -129,14 +136,20 @@ export class VersoConnection {
     const answer = await this.pc.createAnswer();
     await this.pc.setLocalDescription(answer);
 
-    this.iceChannel = subscribeToIce(session.id, "client", async (candidate) => {
+    const pendingV: RTCIceCandidateInit[] = [];
+    this.pc.onicecandidate = ({ candidate }) => {
+      if (candidate) pendingV.push(candidate.toJSON());
+    };
+
+    const { channel: iceChV, ready: readyV } = subscribeToIce(session.id, "client", async (candidate) => {
       try { await this.pc.addIceCandidate(candidate); } catch {}
     });
+    this.iceChannel = iceChV;
 
+    await readyV;
+    for (const c of pendingV) sendIceCandidate(iceChV, "client", c);
     this.pc.onicecandidate = ({ candidate }) => {
-      if (candidate && this.iceChannel) {
-        sendIceCandidate(this.iceChannel, "client", candidate.toJSON());
-      }
+      if (candidate && this.iceChannel) sendIceCandidate(this.iceChannel, "client", candidate.toJSON());
     };
 
     await submitAnswer(code, answer);

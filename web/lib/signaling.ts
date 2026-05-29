@@ -29,15 +29,15 @@ export async function submitAnswer(
 export function subscribeToIce(
   sessionId: string,
   onCandidate: (candidate: RTCIceCandidateInit) => void
-): RealtimeChannel {
+): { channel: RealtimeChannel; ready: Promise<void> } {
   const supabase = createClient();
   const channel = supabase.channel(`ice:${sessionId}`);
+  let resolve!: () => void;
+  const ready = new Promise<void>((r) => { resolve = r; });
   channel
-    .on("broadcast", { event: "host-ice" }, ({ payload }) =>
-      onCandidate(payload)
-    )
-    .subscribe();
-  return channel;
+    .on("broadcast", { event: "host-ice" }, ({ payload }) => onCandidate(payload))
+    .subscribe((status) => { if (status === "SUBSCRIBED") resolve(); });
+  return { channel, ready };
 }
 
 export async function sendClientIce(
