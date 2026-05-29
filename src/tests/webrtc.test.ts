@@ -86,6 +86,8 @@ describe("WebRTC loopback — Recto ↔ Verso", () => {
       onDisconnected: vi.fn(),
       onError: vi.fn(),
       onInputChannel: (ch) => { receivedInputChannel = ch; },
+      onDisplayInfo: vi.fn(),
+      onIdentity: vi.fn(),
     });
 
     // Recto démarre le partage
@@ -127,6 +129,8 @@ describe("WebRTC loopback — Recto ↔ Verso", () => {
       onDisconnected: vi.fn(),
       onError: vi.fn(),
       onInputChannel: (ch) => { inputChannel = ch; },
+      onDisplayInfo: vi.fn(),
+      onIdentity: vi.fn(),
     });
 
     const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
