@@ -1,13 +1,36 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/auth/callback"];
+const PUBLIC_PATHS = ["/login", "/auth/callback", "/auth/desktop-callback"];
+
+function getSupabaseCookiePrefix() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) return null;
+
+  try {
+    const projectRef = new URL(supabaseUrl).hostname.split(".")[0];
+    return `sb-${projectRef}-auth-token`;
+  } catch {
+    return null;
+  }
+}
+
+function clearSupabaseCookies(req: NextRequest, res: NextResponse) {
+  const prefix = getSupabaseCookiePrefix();
+  if (!prefix) return;
+
+  req.cookies
+    .getAll()
+    .filter((cookie) => cookie.name.startsWith(prefix))
+    .forEach((cookie) => {
+      res.cookies.delete(cookie.name);
+    });
+}
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
   const { pathname } = req.nextUrl;
 
-  // Laisser passer les routes publiques et assets
   if (
     PUBLIC_PATHS.includes(pathname) ||
     pathname.startsWith("/_next") ||
@@ -31,13 +54,18 @@ export async function middleware(req: NextRequest) {
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (error || !user) {
     const loginUrl = req.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.searchParams.set("next", pathname + req.nextUrl.search);
-    return NextResponse.redirect(loginUrl);
+    const redirect = NextResponse.redirect(loginUrl);
+    clearSupabaseCookies(req, redirect);
+    return redirect;
   }
 
   return res;
