@@ -13,7 +13,8 @@ export default function VersoPage() {
   const [error, setError] = useState("");
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [inputChannel, setInputChannel] = useState<RTCDataChannel | null>(null);
-  const [hostSize] = useState({ w: 1920, h: 1080 });
+  // Defaults to 1920×1080; updated when Recto sends displayInfo over DataChannel
+  const [hostSize, setHostSize] = useState({ w: 1920, h: 1080 });
   const conn = useRef<VersoConnection | null>(null);
   const navigate = useNavigate();
 
@@ -25,9 +26,10 @@ export default function VersoPage() {
     conn.current = new VersoConnection({
       onStream: (s) => setStream(s),
       onConnected: () => setStatus("connected"),
-      onDisconnected: () => { setStatus("idle"); setStream(null); },
+      onDisconnected: () => { setStatus("idle"); setStream(null); setInputChannel(null); },
       onError: (e) => { setError(e); setStatus("error"); conn.current = null; },
       onInputChannel: (ch) => setInputChannel(ch),
+      onDisplayInfo: (w, h) => setHostSize({ w, h }),
     });
 
     try { await conn.current.connect(trimmed); }
@@ -58,6 +60,7 @@ export default function VersoPage() {
             fontSize: "0.8rem", minHeight: 30, padding: "0 12px",
             background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)",
             border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.8)",
+            zIndex: 10,
           }}
         >
           ✕ Déconnecter
