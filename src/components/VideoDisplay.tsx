@@ -7,7 +7,12 @@ interface VideoDisplayProps {
   hostHeight: number;
 }
 
-export default function VideoDisplay({ stream, inputChannel, hostWidth, hostHeight }: VideoDisplayProps) {
+export default function VideoDisplay({
+  stream,
+  inputChannel,
+  hostWidth,
+  hostHeight,
+}: VideoDisplayProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isLocked, setIsLocked] = useState(false);
@@ -15,9 +20,12 @@ export default function VideoDisplay({ stream, inputChannel, hostWidth, hostHeig
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+      // Minimize jitter buffer for lowest latency
+      (videoRef.current as HTMLVideoElement & { playoutDelayHint?: number }).playoutDelayHint = 0;
     }
   }, [stream]);
 
+  // Auto-focus so keyboard events work immediately without requiring a click
   useEffect(() => {
     containerRef.current?.focus();
   }, []);
@@ -39,7 +47,7 @@ export default function VideoDisplay({ stream, inputChannel, hostWidth, hostHeig
     [inputChannel]
   );
 
-  // Returns scale factor: host pixels per CSS pixel (for pointer lock relative movement)
+  // Scale factor: host pixels per CSS pixel for pointer-lock relative movement
   const getVideoScale = useCallback(() => {
     const video = videoRef.current;
     const container = containerRef.current;
@@ -54,7 +62,7 @@ export default function VideoDisplay({ stream, inputChannel, hostWidth, hostHeig
     return vw / displayW;
   }, [hostWidth, hostHeight]);
 
-  // Returns host-space absolute coordinates, accounting for letterbox offset
+  // Map cursor position to host-space coords, accounting for letterbox offset
   const getAbsolutePos = useCallback(
     (e: React.MouseEvent) => {
       const video = videoRef.current!;
@@ -88,10 +96,18 @@ export default function VideoDisplay({ stream, inputChannel, hostWidth, hostHeig
     [hostWidth, hostHeight]
   );
 
-  const handleClick = useCallback(() => {
-    if (!isLocked) containerRef.current?.requestPointerLock();
-    containerRef.current?.focus();
-  }, [isLocked]);
+  const requestLock = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    // unadjustedMovement disables OS pointer acceleration for raw 1:1 input
+    const promise = (el as Element & {
+      requestPointerLock(opts?: { unadjustedMovement?: boolean }): Promise<void> | void;
+    }).requestPointerLock({ unadjustedMovement: true });
+    if (promise instanceof Promise) {
+      promise.catch(() => el.requestPointerLock());
+    }
+    el.focus();
+  }, []);
 
   return (
     <div
@@ -99,7 +115,7 @@ export default function VideoDisplay({ stream, inputChannel, hostWidth, hostHeig
       className="relative w-full h-full bg-black"
       style={{ cursor: isLocked ? "none" : "default", outline: "none" }}
       tabIndex={0}
-      onClick={handleClick}
+      onClick={requestLock}
       onMouseMove={(e) => {
         if (isLocked) {
           const scale = getVideoScale();
@@ -112,13 +128,15 @@ export default function VideoDisplay({ stream, inputChannel, hostWidth, hostHeig
           sendInput({ type: "mouseMove", ...getAbsolutePos(e) });
         }
       }}
-      onMouseDown={(e) => sendInput({ type: "mouseDown", button: e.button })}
+      onMouseDown={(e) => {
+        sendInput({ type: "mouseDown", button: e.button });
+      }}
       onMouseUp={(e) => sendInput({ type: "mouseUp", button: e.button })}
       onWheel={(e) =>
         sendInput({ type: "mouseWheel", deltaX: e.deltaX, deltaY: e.deltaY })
       }
       onKeyDown={(e) => {
-        // Let browser handle Escape to exit pointer lock naturally
+        // Escape exits pointer lock natively; don't intercept it
         if (e.code === "Escape") return;
         e.preventDefault();
         sendInput({
@@ -155,6 +173,7 @@ export default function VideoDisplay({ stream, inputChannel, hostWidth, hostHeig
         muted={false}
         className="w-full h-full object-contain"
       />
+
       {!stream && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3 text-zinc-500">
@@ -163,6 +182,7 @@ export default function VideoDisplay({ stream, inputChannel, hostWidth, hostHeig
           </div>
         </div>
       )}
+
       {stream && !isLocked && (
         <div
           className="absolute inset-0 flex items-center justify-center"
@@ -171,10 +191,10 @@ export default function VideoDisplay({ stream, inputChannel, hostWidth, hostHeig
           <div
             style={{
               background: "rgba(0,0,0,0.55)",
-              backdropFilter: "blur(8px)",
+              backdropFilter: "blur(10px)",
               borderRadius: 8,
-              padding: "9px 16px",
-              color: "rgba(255,255,255,0.65)",
+              padding: "9px 18px",
+              color: "rgba(255,255,255,0.7)",
               fontSize: "0.8rem",
               border: "1px solid rgba(255,255,255,0.1)",
             }}
