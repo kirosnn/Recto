@@ -81,26 +81,3 @@ export function subscribeToSession(
     .subscribe();
 }
 
-export function subscribeToIce(
-  sessionId: string,
-  role: "host" | "client",
-  onCandidate: (candidate: RTCIceCandidateInit) => void
-): { channel: RealtimeChannel; ready: Promise<void> } {
-  const channel = supabase.channel(`ice:${sessionId}`);
-  const event = role === "host" ? "client-ice" : "host-ice";
-  let resolve!: () => void;
-  const ready = new Promise<void>((r) => { resolve = r; });
-  channel
-    .on("broadcast", { event }, ({ payload }) => onCandidate(payload))
-    .subscribe((status) => { if (status === "SUBSCRIBED") resolve(); });
-  return { channel, ready };
-}
-
-export async function sendIceCandidate(
-  channel: RealtimeChannel,
-  role: "host" | "client",
-  candidate: RTCIceCandidateInit
-): Promise<void> {
-  const event = role === "host" ? "host-ice" : "client-ice";
-  await channel.send({ type: "broadcast", event, payload: candidate });
-}

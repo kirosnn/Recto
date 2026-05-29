@@ -1,10 +1,24 @@
-import { fetchSession, submitAnswer, subscribeToIce, sendClientIce } from "./signaling";
-import { RealtimeChannel } from "@supabase/supabase-js";
+import { fetchSession, submitAnswer } from "./signaling";
 
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
 ];
+
+function waitForIceGathering(pc: RTCPeerConnection, timeoutMs = 8000): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (pc.iceGatheringState === "complete") { resolve(); return; }
+    const timer = setTimeout(resolve, timeoutMs);
+    const handler = () => {
+      if (pc.iceGatheringState === "complete") {
+        clearTimeout(timer);
+        pc.removeEventListener("icegatheringstatechange", handler);
+        resolve();
+      }
+    };
+    pc.addEventListener("icegatheringstatechange", handler);
+  });
+}
 
 export type WebVersoCallbacks = {
   onStream: (stream: MediaStream) => void;
@@ -15,7 +29,6 @@ export type WebVersoCallbacks = {
 
 export class WebVersoConnection {
   private pc: RTCPeerConnection;
-  private iceChannel: RealtimeChannel | null = null;
 
   constructor(private cb: WebVersoCallbacks) {
     this.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
@@ -40,33 +53,14 @@ export class WebVersoConnection {
     const answer = await this.pc.createAnswer();
     await this.pc.setLocalDescription(answer);
 
-    const pending: RTCIceCandidateInit[] = [];
-    this.pc.onicecandidate = ({ candidate }) => {
-      if (candidate) pending.push(candidate.toJSON());
-    };
+    // Attendre que toutes les candidates ICE soient dans le SDP
+    await waitForIceGathering(this.pc);
+    const completeAnswer = this.pc.localDescription!;
 
-    const { channel, ready } = subscribeToIce(session.id, async (candidate) => {
-      try { await this.pc.addIceCandidate(candidate); } catch {}
-    });
-    this.iceChannel = channel;
-
-    await ready;
-    for (const c of pending) sendClientIce(channel, c);
-    this.pc.onicecandidate = ({ candidate }) => {
-      if (candidate && this.iceChannel) sendClientIce(this.iceChannel, candidate.toJSON());
-    };
-
-    await submitAnswer(code, answer);
-  }
-
-  sendInput(event: object) {
-    // Web Verso: input via data channel si disponible
-    // Dans cette version web on n'injecte pas l'input (read-only par défaut)
-    // Un futur data channel pourrait être ajouté ici
+    await submitAnswer(code, completeAnswer);
   }
 
   stop() {
     this.pc.close();
-    this.iceChannel?.unsubscribe();
   }
 }

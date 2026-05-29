@@ -5,14 +5,27 @@ import {
   fetchSessionAnswer,
   submitAnswer,
   subscribeToSession,
-  subscribeToIce,
-  sendIceCandidate,
 } from "./signaling";
 
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
 ];
+
+function waitForIceGathering(pc: RTCPeerConnection, timeoutMs = 8000): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (pc.iceGatheringState === "complete") { resolve(); return; }
+    const timer = setTimeout(resolve, timeoutMs);
+    const handler = () => {
+      if (pc.iceGatheringState === "complete") {
+        clearTimeout(timer);
+        pc.removeEventListener("icegatheringstatechange", handler);
+        resolve();
+      }
+    };
+    pc.addEventListener("icegatheringstatechange", handler);
+  });
+}
 
 export type RectoCallbacks = {
   onCode: (code: string) => void;
@@ -31,7 +44,6 @@ export type VersoCallbacks = {
 
 export class RectoConnection {
   private pc: RTCPeerConnection;
-  private iceChannel: RealtimeChannel | null = null;
   private sessionChannel: RealtimeChannel | null = null;
   private inputChannel: RTCDataChannel | null = null;
   public code = "";
@@ -59,7 +71,11 @@ export class RectoConnection {
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
 
-    this.code = await createSession(offer);
+    // Attendre que toutes les candidates ICE soient dans le SDP
+    await waitForIceGathering(this.pc);
+    const completeOffer = this.pc.localDescription!;
+
+    this.code = await createSession(completeOffer);
     this.cb.onCode(this.code);
 
     const session = await fetchSession(this.code);
@@ -70,31 +86,13 @@ export class RectoConnection {
       }
     };
 
-    // Souscription session en premier — maximise la fenêtre de temps avant que Verso réponde
     this.sessionChannel = subscribeToSession(session.id, async (update) => {
       if (update.answer) await applyAnswer(update.answer as RTCSessionDescriptionInit);
     });
 
-    // Buffer les candidates ICE pendant que le canal WebSocket s'initialise
-    const pending: RTCIceCandidateInit[] = [];
-    this.pc.onicecandidate = ({ candidate }) => {
-      if (candidate) pending.push(candidate.toJSON());
-    };
-
-    const { channel, ready } = subscribeToIce(session.id, "host", async (candidate) => {
-      try { await this.pc.addIceCandidate(candidate); } catch {}
-    });
-    this.iceChannel = channel;
-
-    await ready;
-    for (const c of pending) sendIceCandidate(channel, "host", c);
-    this.pc.onicecandidate = ({ candidate }) => {
-      if (candidate && this.iceChannel) sendIceCandidate(this.iceChannel, "host", candidate.toJSON());
-    };
-
-    // Fallback : si Verso a soumis la réponse pendant le setup, on la récupère
-    const existingAnswer = await fetchSessionAnswer(session.id);
-    if (existingAnswer) await applyAnswer(existingAnswer);
+    // Fallback si la réponse est arrivée avant l'abonnement
+    const existing = await fetchSessionAnswer(session.id);
+    if (existing) await applyAnswer(existing);
   }
 
   getInputChannel(): RTCDataChannel | null {
@@ -103,14 +101,12 @@ export class RectoConnection {
 
   stop() {
     this.pc.close();
-    this.iceChannel?.unsubscribe();
     this.sessionChannel?.unsubscribe();
   }
 }
 
 export class VersoConnection {
   private pc: RTCPeerConnection;
-  private iceChannel: RealtimeChannel | null = null;
 
   constructor(private cb: VersoCallbacks) {
     this.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
@@ -146,27 +142,14 @@ export class VersoConnection {
     const answer = await this.pc.createAnswer();
     await this.pc.setLocalDescription(answer);
 
-    const pendingV: RTCIceCandidateInit[] = [];
-    this.pc.onicecandidate = ({ candidate }) => {
-      if (candidate) pendingV.push(candidate.toJSON());
-    };
+    // Attendre que toutes les candidates ICE soient dans le SDP
+    await waitForIceGathering(this.pc);
+    const completeAnswer = this.pc.localDescription!;
 
-    const { channel: iceChV, ready: readyV } = subscribeToIce(session.id, "client", async (candidate) => {
-      try { await this.pc.addIceCandidate(candidate); } catch {}
-    });
-    this.iceChannel = iceChV;
-
-    await readyV;
-    for (const c of pendingV) sendIceCandidate(iceChV, "client", c);
-    this.pc.onicecandidate = ({ candidate }) => {
-      if (candidate && this.iceChannel) sendIceCandidate(this.iceChannel, "client", candidate.toJSON());
-    };
-
-    await submitAnswer(code, answer);
+    await submitAnswer(code, completeAnswer);
   }
 
   stop() {
     this.pc.close();
-    this.iceChannel?.unsubscribe();
   }
 }
