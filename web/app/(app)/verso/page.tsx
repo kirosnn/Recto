@@ -124,7 +124,7 @@ export default function VersoPage() {
         style={{
           position: "relative",
           width: "100vw",
-          height: "100vh",
+          height: "100dvh",
           background: "#000",
         }}
       >
