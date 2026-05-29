@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { VersoConnection, type PeerIdentity } from "../lib/webrtc";
 import { useAuth } from "../context/useAuth";
 import { identityFromUser } from "../lib/identity";
@@ -8,6 +9,11 @@ import PreferencesDrawer from "../components/PreferencesDrawer";
 import BackButton from "../components/BackButton";
 
 type Status = "idle" | "connecting" | "connected" | "error";
+
+// Toggle the Tauri window fullscreen (best-effort)
+const setFullscreen = (v: boolean) => {
+  getCurrentWindow().setFullscreen(v).catch(() => {});
+};
 
 export default function VersoPage() {
   const { user } = useAuth();
@@ -19,6 +25,8 @@ export default function VersoPage() {
   // Defaults to 1920×1080; updated when Recto sends displayInfo over DataChannel
   const [hostSize, setHostSize] = useState({ w: 1920, h: 1080 });
   const [peer, setPeer] = useState<PeerIdentity | null>(null);
+  // Ctrl+Alt+H hides the on-video overlays for an immersive view
+  const [hideUI, setHideUI] = useState(false);
   const conn = useRef<VersoConnection | null>(null);
 
   const handleConnect = async () => {
@@ -32,17 +40,20 @@ export default function VersoPage() {
 
     conn.current = new VersoConnection({
       onStream: (s) => setStream(s),
-      onConnected: () => setStatus("connected"),
+      onConnected: () => { setStatus("connected"); setFullscreen(true); },
       onDisconnected: () => {
         setStatus("idle");
         setStream(null);
         setInputChannel(null);
         setPeer(null);
+        setHideUI(false);
+        setFullscreen(false);
       },
       onError: (e) => {
         setError(e);
         setStatus("error");
         conn.current = null;
+        setFullscreen(false);
       },
       onInputChannel: (ch) => setInputChannel(ch),
       onDisplayInfo: (w, h) => setHostSize({ w, h }),
@@ -66,6 +77,8 @@ export default function VersoPage() {
     setInputChannel(null);
     setPeer(null);
     setCode("");
+    setHideUI(false);
+    setFullscreen(false);
   };
 
   useEffect(() => () => conn.current?.stop(), []);
@@ -110,8 +123,10 @@ export default function VersoPage() {
           inputChannel={inputChannel}
           hostWidth={hostSize.w}
           hostHeight={hostSize.h}
+          hideUI={hideUI}
+          onToggleUI={() => setHideUI((v) => !v)}
         />
-        {peer && (
+        {peer && !hideUI && (
           <PeerBadge
             peer={peer}
             label="Connecté à"
@@ -126,25 +141,27 @@ export default function VersoPage() {
             }}
           />
         )}
-        <button
-          onClick={handleDisconnect}
-          className="btn btn-ghost"
-          style={{
-            position: "absolute",
-            top: 10,
-            right: 10,
-            fontSize: "0.8rem",
-            minHeight: 30,
-            padding: "0 12px",
-            background: "rgba(0,0,0,0.5)",
-            backdropFilter: "blur(8px)",
-            border: "1px solid rgba(255,255,255,0.12)",
-            color: "rgba(255,255,255,0.8)",
-            zIndex: 10,
-          }}
-        >
-          ✕ Déconnecter
-        </button>
+        {!hideUI && (
+          <button
+            onClick={handleDisconnect}
+            className="btn btn-ghost"
+            style={{
+              position: "absolute",
+              top: 10,
+              right: 10,
+              fontSize: "0.8rem",
+              minHeight: 30,
+              padding: "0 12px",
+              background: "rgba(0,0,0,0.5)",
+              backdropFilter: "blur(8px)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              color: "rgba(255,255,255,0.8)",
+              zIndex: 10,
+            }}
+          >
+            ✕ Déconnecter
+          </button>
+        )}
       </div>
     );
   }
