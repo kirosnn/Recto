@@ -96,7 +96,7 @@ html[data-theme="dark"] body { background: #202020; color: #f5f1e8; }
     margin: 20px auto 0;
     text-align: center;
     font-family: var(--font-sans);
-    font-size: clamp(2.2rem, 6vw, 5.4rem);
+    font-size: clamp(2rem, 5vw, 4.4rem);
     font-weight: 650;
     line-height: 0.96;
     letter-spacing: 0;
@@ -523,7 +523,7 @@ input, select, textarea { font-size: 16px; }
 
     .main-intro {
         margin-top: 16px;
-        font-size: clamp(1.35rem, 6.5vw, 2rem);
+        font-size: clamp(1.2rem, 6vw, 1.8rem);
         line-height: 1.06;
         letter-spacing: 0;
     }

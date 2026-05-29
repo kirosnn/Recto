@@ -57,7 +57,7 @@ export default function LoginPage() {
           style={{ width: 56, height: 56, margin: "0 auto 16px", display: "block", objectFit: "contain" }}
         />
         <h1 className="serif" style={{
-          fontSize: "clamp(1.6rem, 3vw, 2.2rem)",
+          fontSize: "clamp(1.4rem, 2.8vw, 2rem)",
           letterSpacing: "-0.04em", color: "var(--tx)",
         }}>
           Bienvenue.

@@ -27,7 +27,7 @@ export default function Home() {
         <h1
           className="serif"
           style={{
-            fontSize: "clamp(1.8rem, 3.5vw, 2.6rem)",
+            fontSize: "clamp(1.6rem, 3vw, 2.2rem)",
             letterSpacing: "-0.04em",
             lineHeight: 1.05,
             color: "var(--tx)",
