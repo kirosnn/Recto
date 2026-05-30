@@ -1,5 +1,5 @@
 /**
- * WinDirector — Terminal Benchmark
+ * Recto — Terminal Benchmark
  *
  * Usage:
  *   node index.mjs [options]
@@ -86,7 +86,7 @@ function scoreFps(results) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log(`\n${B}${ACC}▶ WinDirector — Benchmark WebRTC${R}\n${HR}`);
+   console.log(`\n${B}${ACC}▶ Recto — Benchmark WebRTC${R}\n${HR}`);
   console.log(`${DIM}Codec: ${codec}  ·  FPS: ${fps}  ·  Bitrate: ${bitrate/1000} Mbps  ·  Résolution: ${resolution}p  ·  Durée: ${duration}s${R}\n`);
 
   process.stdout.write(`${DIM}Lancement navigateur…${R}`);

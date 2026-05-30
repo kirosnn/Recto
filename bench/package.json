@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "WebRTC benchmark suite for WinDirector",
+  "description": "WebRTC benchmark suite for Recto",
   "scripts": {
     "setup": "playwright install chromium",
     "bench": "node index.mjs",

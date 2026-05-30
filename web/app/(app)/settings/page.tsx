@@ -360,7 +360,7 @@ export default function SettingsPage() {
         </Section>
 
         <p style={{ textAlign: "center", fontSize: "0.72rem", color: "var(--tx-3)", marginTop: 8 }}>
-          WinDirector · Web
+          Recto · Web
         </p>
       </div>
     </div>

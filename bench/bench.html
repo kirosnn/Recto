@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>WinDirector — Benchmark WebRTC</title>
+  <title>Recto — Benchmark WebRTC</title>
   <style>
     body { font-family: monospace; background: #0a0a0a; color: #d0d0c8; margin: 0; padding: 24px; }
     h1   { color: #d97757; font-size: 1.1rem; margin: 0 0 6px; }
@@ -17,7 +17,7 @@
 <body>
 <canvas id="c"></canvas>
 <video id="v" autoplay muted playsinline></video>
-<h1>WinDirector — Benchmark WebRTC</h1>
+<h1>Recto — Benchmark WebRTC</h1>
 <div id="sub">Loopback local · mesure codec, bitrate, FPS, latence encodeur</div>
 <button id="start-btn" style="margin: 12px 0; padding: 10px 24px; font-size: 1rem; background:#d97757; color:white; border:none; border-radius:8px; cursor:pointer;">
   Lancer le benchmark
@@ -109,7 +109,7 @@ function draw() {
   // Text (sharp pixels, worst case for encoder inter prediction)
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
   ctx.font = `bold ${W * 0.022 | 0}px monospace`;
-  ctx.fillText(`WinDirector · Frame ${frame} · ${CODEC} ${RES_P}p @ ${TARGET_FPS}fps`, W * 0.02, H * 0.06);
+  ctx.fillText(`Recto · Frame ${frame} · ${CODEC} ${RES_P}p @ ${TARGET_FPS}fps`, W * 0.02, H * 0.06);
   ctx.font = `${W * 0.014 | 0}px monospace`;
   ctx.fillText(new Date().toISOString(), W * 0.02, H * 0.11);
   ctx.fillText(`Target bitrate: ${TARGET_KBPS / 1000} Mbps  Duration: ${DURATION}s`, W * 0.02, H * 0.16);

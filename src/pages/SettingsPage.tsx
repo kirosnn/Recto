@@ -401,7 +401,7 @@ export default function SettingsPage() {
 
         {/* version */}
         <p style={{ textAlign: "center", fontSize: "0.72rem", color: "var(--tx-3)", marginTop: 8 }}>
-          WinDirector · Recto
+          Recto
         </p>
       </div>
     </div>
