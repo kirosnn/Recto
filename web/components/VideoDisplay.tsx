@@ -47,7 +47,6 @@ export default function VideoDisplay({
   hideUI,
   onToggleUI,
 }: VideoDisplayProps) {
-  const { settings } = useWebSettings();
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const kbRef = useRef<HTMLInputElement>(null);
@@ -56,12 +55,18 @@ export default function VideoDisplay({
   const [kbActive, setKbActive] = useState(false);
   const lastMoveRef = useRef(0);
 
+  const { settings } = useWebSettings();
+
   useEffect(() => {
     if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-      (videoRef.current as HTMLVideoElement & { playoutDelayHint?: number }).playoutDelayHint = 0;
+      const video = videoRef.current;
+      video.srcObject = stream;
+      video.playsInline = true;
+      video.disablePictureInPicture = true;
+      video.muted = true; // required for autoplay on mobile
+      (video as HTMLVideoElement & { playoutDelayHint?: number }).playoutDelayHint = settings.lowLatencyMode ? 0 : undefined;
     }
-  }, [stream]);
+  }, [stream, settings.lowLatencyMode]);
 
   useEffect(() => {
     containerRef.current?.focus();
@@ -84,6 +89,21 @@ export default function VideoDisplay({
     },
     [inputChannel]
   );
+
+  // Apply low-latency receiver hints when connected
+  useEffect(() => {
+    if (!inputChannel || !settings.lowLatencyMode) return;
+    const pc = (inputChannel as any).pc || null;
+    // Best-effort: reduce jitter buffer target on the video receiver
+    try {
+      const receivers = (pc as RTCPeerConnection)?.getReceivers?.() || [];
+      for (const r of receivers) {
+        if (r.track.kind === "video" && "jitterBufferTarget" in r) {
+          (r as any).jitterBufferTarget = 0;
+        }
+      }
+    } catch {}
+  }, [inputChannel, settings.lowLatencyMode]);
 
   // Host pixels per CSS pixel, for relative (pointer-lock / trackpad) movement
   const getVideoScale = useCallback(() => {
@@ -197,7 +217,11 @@ export default function VideoDisplay({
         const dx = t.clientX - g.lastX;
         const dy = t.clientY - g.lastY;
         if (dx || dy) {
-          sendInput({ type: "mouseMoveDelta", dx: Math.round(dx * scale), dy: Math.round(dy * scale) });
+          sendInput({
+            type: "mouseMoveDelta",
+            dx: Math.round(dx * scale * settings.touchSensitivity),
+            dy: Math.round(dy * scale * settings.touchSensitivity),
+          });
         }
         g.lastX = t.clientX;
         g.lastY = t.clientY;
@@ -205,7 +229,7 @@ export default function VideoDisplay({
         const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
         const ddy = midY - g.lastMidY;
         if (Math.abs(ddy) > 1) {
-          sendInput({ type: "mouseWheel", deltaX: 0, deltaY: Math.round(-ddy * 2) });
+          sendInput({ type: "mouseWheel", deltaX: 0, deltaY: Math.round(-ddy * 2 * settings.touchSensitivity) });
         }
         g.lastMidY = midY;
         g.lastX = e.touches[0].clientX;
@@ -243,7 +267,7 @@ export default function VideoDisplay({
       el.removeEventListener("touchend", onEnd);
       el.removeEventListener("touchcancel", onEnd);
     };
-  }, [getVideoScale, sendInput, ensureFullscreen]);
+  }, [getVideoScale, sendInput, ensureFullscreen, settings.touchSensitivity]);
 
   // Forward a key event (from the container or the hidden mobile input)
   const forwardKey = useCallback(
