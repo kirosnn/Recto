@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase-browser";
 import { useTheme } from "./ThemeProvider";
-import { useWebSettings } from "../lib/webSettings";
 
 type User = {
   user_metadata: { full_name?: string; avatar_url?: string };
@@ -15,14 +14,7 @@ export default function PreferencesDrawer({ user }: { user?: User }) {
   const [open, setOpen] = useState(false);
   const { theme, toggle } = useTheme();
   const router = useRouter();
-  const pathname = usePathname();
   const supabase = createClient();
-  const { settings, update } = useWebSettings();
-
-  const isVerso = pathname?.includes("/verso");
-  const requestedBitrateLabel = settings.requestedBitrateKbps
-    ? `${settings.requestedBitrateKbps / 1000} Mbps`
-    : "Illimité";
 
   const name = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "";
   const avatar = user?.user_metadata?.avatar_url;
@@ -66,158 +58,43 @@ export default function PreferencesDrawer({ user }: { user?: User }) {
           </div>
         </div>
 
-        {isVerso && (
-          <>
-            {/* ── Entrée (client) ── */}
-            <div className="main-preferences-group">
-              <p className="main-preferences-group-title">Entrée</p>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.45rem" }}>
-                <span style={{ fontSize: "0.82rem", color: "var(--tx-2, #6d6057)" }}>Souris</span>
-                <div style={{ display: "flex", gap: "0.35rem" }}>
-                  {([{ label: "Max", ms: 0 }, { label: "60fps", ms: 16 }, { label: "30fps", ms: 33 }] as const).map(({ label, ms }) => (
-                    <button
-                      key={ms}
-                      type="button"
-                      className={`main-preferences-option${settings.inputThrottleMs === ms ? " is-active" : ""}`}
-                      style={{ minHeight: 28, padding: "0 9px", fontSize: "0.8rem" }}
-                      onClick={() => update({ inputThrottleMs: ms })}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* ── Affichage (client) ── */}
-            <div className="main-preferences-group">
-              <p className="main-preferences-group-title">Affichage</p>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "0.82rem", color: "var(--tx-2, #6d6057)" }}>Ajustement</span>
-                <div style={{ display: "flex", gap: "0.35rem" }}>
-                  {(["contain", "cover"] as const).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      className={`main-preferences-option${settings.displayMode === m ? " is-active" : ""}`}
-                      style={{ minHeight: 28, padding: "0 9px", fontSize: "0.8rem" }}
-                      onClick={() => update({ displayMode: m })}
-                    >
-                      {m === "contain" ? "Letterbox" : "Plein"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.45rem" }}>
-              <span style={{ fontSize: "0.82rem", color: "var(--tx-2, #6d6057)" }}>Stats overlay</span>
-              <button
-                type="button"
-                style={{
-                  width: 36, height: 20, borderRadius: 999, border: "none", padding: 0,
-                  background: settings.showStats ? "#d97757" : "rgba(18,18,18,0.14)",
-                  cursor: "pointer", position: "relative", transition: "background 200ms",
-                }}
-                onClick={() => update({ showStats: !settings.showStats })}
-              >
-                <span style={{
-                  display: "block", width: 14, height: 14, borderRadius: "50%", background: "#fff",
-                  position: "absolute", top: 3, left: settings.showStats ? 19 : 3,
-                  transition: "left 200ms", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-                }} />
-              </button>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.45rem" }}>
-              <span style={{ fontSize: "0.82rem", color: "var(--tx-2, #6d6057)" }}>Mode basse latence</span>
-              <button
-                type="button"
-                className={`pref-toggle-pill${settings.lowLatencyMode ? " is-on" : ""}`}
-                onClick={() => update({ lowLatencyMode: !settings.lowLatencyMode })}
-                aria-pressed={settings.lowLatencyMode}
-              >
-                <span className="pref-toggle-pill-knob" />
-              </button>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.45rem" }}>
-              <span style={{ fontSize: "0.82rem", color: "var(--tx-2, #6d6057)" }}>Décodage matériel</span>
-              <button
-                type="button"
-                className={`pref-toggle-pill${settings.hardwareDecode ? " is-on" : ""}`}
-                onClick={() => update({ hardwareDecode: !settings.hardwareDecode })}
-                aria-pressed={settings.hardwareDecode}
-              >
-                <span className="pref-toggle-pill-knob" />
-              </button>
-            </div>
-
-            <div style={{ marginTop: "0.55rem" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.35rem" }}>
-                <span style={{ fontSize: "0.82rem", color: "var(--tx-2, #6d6057)" }}>Sensibilité tactile</span>
-                <span style={{ fontSize: "0.72rem", color: "var(--tx-3, #9a8f86)" }}>{settings.touchSensitivity.toFixed(1)}×</span>
-              </div>
-              <input
-                type="range"
-                className="pref-slider"
-                min={0.5}
-                max={2}
-                step={0.1}
-                value={settings.touchSensitivity}
-                onChange={(e) => update({ touchSensitivity: parseFloat(e.target.value) })}
-                style={{ width: "100%" }}
-              />
-            </div>
-          </div>
-
-          {/* ── Qualité demandée au Recto ── */}
-          <div className="main-preferences-group">
-            <p className="main-preferences-group-title">Qualité Recto</p>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
-              <span style={{ fontSize: "0.82rem", color: "var(--tx-2, #6d6057)" }}>Codec</span>
-              <div style={{ display: "flex", gap: "0.3rem" }}>
-                {(["auto","H264","H265","AV1","VP9"] as const).map((c) => (
-                  <button key={c} type="button" className={`main-preferences-option${settings.requestedCodec === c ? " is-active" : ""}`}
-                    style={{ minHeight: 26, padding: "0 7px", fontSize: "0.72rem" }}
-                    onClick={() => update({ requestedCodec: c })}>
-                    {c === "auto" ? "Auto" : c}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.45rem" }}>
-              <span style={{ fontSize: "0.82rem", color: "var(--tx-2, #6d6057)" }}>FPS</span>
-              <div style={{ display: "flex", gap: "0.3rem" }}>
-                {[30,60].map((f) => (
-                  <button key={f} type="button" className={`main-preferences-option${settings.requestedFps === f ? " is-active" : ""}`}
-                    style={{ minHeight: 26, padding: "0 9px", fontSize: "0.72rem" }}
-                    onClick={() => update({ requestedFps: f as 30 | 60 })}>
-                    {f}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.35rem" }}>
-                <span style={{ fontSize: "0.82rem", color: "var(--tx-2, #6d6057)" }}>Bitrate</span>
-                <span style={{ fontSize: "0.72rem", color: "var(--tx-3, #9a8f86)" }}>{requestedBitrateLabel}</span>
-              </div>
-              <input
-                type="range"
-                className="pref-slider"
-                min={0}
-                max={80}
-                step={1}
-                value={settings.requestedBitrateKbps ? Math.min(80, settings.requestedBitrateKbps / 1000) : 0}
-                onChange={(e) => {
-                  const value = Number(e.target.value);
-                  update({ requestedBitrateKbps: value === 0 ? null : value * 1000 });
-                }}
-                style={{ width: "100%" }}
-              />
-            </div>
-          </div>
-        </>
-        )}
+        <div className="main-preferences-group">
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              router.push("/settings");
+            }}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "9px 12px",
+              borderRadius: 10,
+              border: "1px solid var(--border-2)",
+              background: "var(--bg-alt)",
+              color: "var(--tx)",
+              cursor: "pointer",
+              fontSize: "0.88rem",
+              fontWeight: 500,
+              transition: "background 160ms ease",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--border)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--bg-alt)")}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden>
+                <path d="M8.5 3H11.5L12.2 5.3C12.8 5.5 13.4 5.8 13.9 6.2L16.2 5.5L17.7 8L15.9 9.5C16 9.8 16 10.1 16 10.5C16 10.8 16 11.1 15.9 11.5L17.7 13L16.2 15.5L13.9 14.8C13.4 15.2 12.8 15.5 12.2 15.7L11.5 18H8.5L7.8 15.7C7.2 15.5 6.6 15.2 6.1 14.8L3.8 15.5L2.3 13L4.1 11.5C4 11.1 4 10.8 4 10.5C4 10.1 4 9.8 4.1 9.5L2.3 8L3.8 5.5L6.1 6.2C6.6 5.8 7.2 5.5 7.8 5.3L8.5 3Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                <circle cx="10" cy="10.5" r="2.5" stroke="currentColor" strokeWidth="1.5"/>
+              </svg>
+              Paramètres
+            </span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden style={{ color: "var(--tx-3)" }}>
+              <path d="M4.5 2L8.5 6L4.5 10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        </div>
 
         {user && (
           <div className="main-preferences-user">
@@ -237,15 +114,6 @@ export default function PreferencesDrawer({ user }: { user?: User }) {
             </div>
           </div>
         )}
-
-        <button
-          type="button"
-          onClick={() => router.push("/settings")}
-          className="main-preferences-logout"
-          style={{ background: "transparent", color: "var(--tx-2)", border: "1px solid var(--border-2)" }}
-        >
-          Paramètres complets
-        </button>
 
         {user && (
           <button type="button" className="main-preferences-logout" onClick={handleLogout}>
