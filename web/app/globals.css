@@ -997,3 +997,41 @@ textarea {
         border-color: rgba(255, 255, 255, 0.1);
     }
 }
+
+/* ─── Drawer inline options & toggle pill ───────────────── */
+.main-preferences-options-inline {
+  display: flex;
+  gap: 6px;
+}
+
+.main-preferences-toggle-pill {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--bg-alt);
+  border: 1px solid var(--border-2);
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+
+.main-preferences-toggle-pill.is-on {
+  background: #3a3a3a;
+  border-color: transparent;
+}
+
+.main-preferences-toggle-pill .pref-toggle-pill-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #fff;
+  transition: left 160ms ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.main-preferences-toggle-pill.is-on .pref-toggle-pill-knob {
+  left: 22px;
+}
