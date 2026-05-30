@@ -113,9 +113,9 @@ export default function VideoDisplay({
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
-      (videoRef.current as HTMLVideoElement & { playoutDelayHint?: number }).playoutDelayHint = 0;
+      (videoRef.current as HTMLVideoElement & { playoutDelayHint?: number }).playoutDelayHint = settings.lowLatencyMode ? 0 : undefined;
     }
-  }, [stream]);
+  }, [stream, settings.lowLatencyMode]);
 
   useEffect(() => {
     containerRef.current?.focus();
@@ -143,6 +143,10 @@ export default function VideoDisplay({
     const id = setInterval(poll, 1000);
     return () => clearInterval(id);
   }, [showStats, getStats]);
+
+  useEffect(() => {
+    setShowStats(settings.showStats);
+  }, [settings.showStats]);
 
   // Build gamepad sender callback (stable ref — re-created only when inputChannel changes)
   const sendGamepad = useCallback(
@@ -390,6 +394,7 @@ export default function VideoDisplay({
         playsInline
         muted={false}
         className="w-full h-full object-contain"
+        style={{ objectFit: settings.displayMode }}
       />
 
       {!stream && (
