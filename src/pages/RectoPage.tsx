@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRectoSession } from "../context/RectoSessionContext";
 import PreferencesDrawer from "../components/PreferencesDrawer";
 import PeerBadge from "../components/PeerBadge";
 import BackButton from "../components/BackButton";
+import type { VideoStats } from "../components/VideoDisplay";
 
 export default function RectoPage() {
-  const { status, code, duration, error, copied, peer, lastInputRef, start, stop, copyCode } = useRectoSession();
+  const { status, code, duration, error, copied, peer, lastInputRef, start, stop, copyCode, getStats } = useRectoSession();
   const navigate = useNavigate();
 
   // Debug overlay (Ctrl+Alt+D): shows the last input event injected on the host,
@@ -14,11 +15,19 @@ export default function RectoPage() {
   const [showDebug, setShowDebug] = useState(false);
   const [dbg, setDbg] = useState({ summary: "", count: 0 });
 
+  const [showStats, setShowStats] = useState(false);
+  const [videoStats, setVideoStats] = useState<VideoStats>({ bitrateKbps: 0, packetsLost: 0, packetsReceived: 0, rtt: 0 });
+  const prevSnapRef = useRef<any>(null);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.altKey && e.code === "KeyD") {
         e.preventDefault();
         setShowDebug((v) => !v);
+      }
+      if (e.ctrlKey && e.altKey && e.code === "KeyS") {
+        e.preventDefault();
+        setShowStats((v) => !v);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -30,6 +39,33 @@ export default function RectoPage() {
     const id = setInterval(() => setDbg({ ...lastInputRef.current }), 100);
     return () => clearInterval(id);
   }, [showDebug, lastInputRef]);
+
+  useEffect(() => {
+    if (!showStats || !getStats) return;
+    const id = setInterval(async () => {
+      const report = await getStats();
+      let inbound: any = null;
+      report.forEach((s: any) => { if (s.type === "inbound-rtp" && s.kind === "video") inbound = s; });
+      if (inbound) {
+        const bytes = (inbound.bytesReceived as number) ?? 0;
+        const prev = prevSnapRef.current;
+        const now = Date.now();
+        let bitrateKbps = 0;
+        if (prev) {
+          const dt = (now - prev.ts) / 1000;
+          if (dt > 0) bitrateKbps = Math.round(((bytes - prev.bytes) * 8) / 1000 / dt);
+        }
+        prevSnapRef.current = { bytes, ts: now };
+        setVideoStats({
+          bitrateKbps,
+          packetsLost: (inbound.packetsLost as number) ?? 0,
+          packetsReceived: (inbound.packetsReceived as number) ?? 0,
+          rtt: 0,
+        });
+      }
+    }, 500);
+    return () => clearInterval(id);
+  }, [showStats, getStats]);
 
   const fmt = (s: number) =>
     [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60]
@@ -45,6 +81,15 @@ export default function RectoPage() {
       <BackButton
         onClick={() => navigate("/")}
       />
+
+      {showStats && status === "connected" && (
+        <div style={{ position: "fixed", top: 12, right: 12, zIndex: 9999, padding: "10px 14px", borderRadius: 10, background: "rgba(0,0,0,0.82)", color: "#fff", border: "1px solid rgba(255,255,255,0.15)", fontSize: "0.78rem", lineHeight: 1.5, pointerEvents: "none", boxShadow: "0 4px 14px rgba(0,0,0,0.4)", minWidth: 180 }}>
+          <div style={{ color: "rgba(255,255,255,0.55)", fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Stats réseau · Ctrl+Alt+S</div>
+          <div>Bitrate: {videoStats.bitrateKbps >= 1000 ? `${(videoStats.bitrateKbps / 1000).toFixed(1)} Mbps` : `${videoStats.bitrateKbps} Kbps`}</div>
+          <div>RTT: {videoStats.rtt} ms</div>
+          <div>Paquets perdus: {videoStats.packetsLost}</div>
+        </div>
+      )}
 
       {showDebug && (
         <div
