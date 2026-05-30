@@ -1,5 +1,6 @@
 {
   "productName": "Recto Dev",
+  "identifier": "com.recto.dev.recto",
   "build": {
     "devUrl": "http://localhost:5173",
     "beforeDevCommand": "npm run dev -- --port 5173"
@@ -7,7 +8,7 @@
   "app": {
     "windows": [
       {
-        "label": "recto",
+        "label": "main",
         "url": "/recto",
         "title": "Recto",
         "width": 1280,
