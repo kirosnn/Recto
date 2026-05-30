@@ -246,18 +246,22 @@ export default function VersoPage() {
         style={{
           maxWidth: 420,
           margin: "0 auto 24px",
-          padding: "14px 18px",
-          background: "rgba(217,119,87,0.1)",
-          border: "1px solid rgba(217,119,87,0.35)",
-          borderRadius: 12,
+          padding: "18px 22px",
+          background: "var(--surface)",
+          border: "1px solid var(--border-2)",
+          borderRadius: 16,
           fontSize: "0.9rem",
-          color: "#d97757",
+          color: "var(--tx-2)",
           textAlign: "center",
-          lineHeight: 1.4,
+          lineHeight: 1.45,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
         }}
       >
-        <strong>Recommandé :</strong> Utilisez l’application <strong>Recto</strong> (Windows) pour streamer.
-        Le client web est expérimental et ne permet pas un streaming stable.
+        <div style={{ color: "#d97757", fontWeight: 600, marginBottom: 4 }}>
+          Recommandé
+        </div>
+        Utilisez l’application <strong>Recto</strong> (Windows) pour streamer.<br />
+        Le client web est expérimental et limité.
       </div>
 
       <div
