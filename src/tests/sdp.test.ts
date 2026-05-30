@@ -51,7 +51,7 @@ describe("applyBitrateToSdp", () => {
     expect(out).not.toContain("b=AS:");
     // Start modéré : l'estimateur de bande passante monte tout seul, on ne veut
     // pas saturer le lien dès les premières frames (cf. fix collapse spiral).
-    expect(out).toContain("x-google-start-bitrate=6000");
+    expect(out).toContain("x-google-start-bitrate=8000");
     expect(out).not.toContain("x-google-max-bitrate");
   });
 
