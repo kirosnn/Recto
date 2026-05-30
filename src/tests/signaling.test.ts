@@ -103,8 +103,8 @@ describe("Signaling — gestion des sessions", () => {
     const code = await createSession(offer);
     // submitAnswer ne doit pas lever d'erreur et doit changer le status en "connected"
     await expect(submitAnswer(code, answer)).resolves.toBeUndefined();
-    // La session est maintenant "connected" — fetchSession (filtre waiting) ne la trouve plus
-    await expect(fetchSession(code)).rejects.toThrow("Session introuvable");
+    // La session est maintenant "connected" — fetchSession la rejette comme occupée
+    await expect(fetchSession(code)).rejects.toThrow("Cette session est déjà occupée");
   });
 
   it("endSession change le status en 'ended'", async () => {
