@@ -4,8 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase-browser";
 import { useTheme } from "./ThemeProvider";
-import { useWebSettings } from "../lib/webSettings";
-import { bitrateLabel } from "../../src/lib/settings";
 
 type User = {
   user_metadata: { full_name?: string; avatar_url?: string };
@@ -16,9 +14,7 @@ export default function PreferencesDrawer({ user }: { user?: User }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const { theme, toggle } = useTheme();
-  const { settings, update } = useWebSettings();
   const supabase = createClient();
-  const isVerso = true; // site is primarily Verso client
 
   const name = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "";
   const avatar = user?.user_metadata?.avatar_url;
@@ -59,129 +55,6 @@ export default function PreferencesDrawer({ user }: { user?: User }) {
                 {t === "dark" ? "Sombre" : "Clair"}
               </button>
             ))}
-          </div>
-        </div>
-
-        <div className="main-preferences-group">
-          <p className="main-preferences-group-title">Entrée</p>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
-            <span style={{ fontSize: "0.82rem", color: "var(--tx-2)" }}>Souris</span>
-            <div className="main-preferences-options main-preferences-options-inline">
-              {([{ label: "Max", ms: 0 }, { label: "60fps", ms: 16 }, { label: "30fps", ms: 33 }] as const).map(({ label, ms }) => (
-                <button
-                  key={ms}
-                  type="button"
-                  className={`main-preferences-option main-preferences-option-sm${settings.inputThrottleMs === ms ? " is-active" : ""}`}
-                  onClick={() => update({ inputThrottleMs: ms })}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <span style={{ fontSize: "0.82rem", color: "var(--tx-2)" }}>Manette</span>
-            <input
-              type="range"
-              className="pref-slider"
-              min={1}
-              max={100}
-              step={1}
-              value={Math.round(settings.virtualGamepadSensitivity * 1000)}
-              onChange={(e) => update({ virtualGamepadSensitivity: Number(e.target.value) / 1000 })}
-              style={{ maxWidth: 132 }}
-            />
-          </div>
-        </div>
-
-        <div className="main-preferences-group">
-          <p className="main-preferences-group-title">Affichage</p>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
-            <span style={{ fontSize: "0.82rem", color: "var(--tx-2)" }}>Image</span>
-            <div className="main-preferences-options main-preferences-options-inline">
-              {(["contain", "cover"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  className={`main-preferences-option main-preferences-option-sm${settings.displayMode === mode ? " is-active" : ""}`}
-                  onClick={() => update({ displayMode: mode })}
-                >
-                  {mode === "contain" ? "Letterbox" : "Plein"}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
-            <span style={{ fontSize: "0.82rem", color: "var(--tx-2)" }}>Stats</span>
-            <button
-              type="button"
-              className={`main-preferences-toggle-pill${settings.showStats ? " is-on" : ""}`}
-              onClick={() => update({ showStats: !settings.showStats })}
-              aria-pressed={settings.showStats}
-            >
-              <span className="pref-toggle-pill-knob" />
-            </button>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <span style={{ fontSize: "0.82rem", color: "var(--tx-2)" }}>Basse latence</span>
-            <button
-              type="button"
-              className={`main-preferences-toggle-pill${settings.lowLatencyMode ? " is-on" : ""}`}
-              onClick={() => update({ lowLatencyMode: !settings.lowLatencyMode })}
-              aria-pressed={settings.lowLatencyMode}
-            >
-              <span className="pref-toggle-pill-knob" />
-            </button>
-          </div>
-        </div>
-
-        <div className="main-preferences-group">
-          <p className="main-preferences-group-title">Qualité Recto</p>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
-            <span style={{ fontSize: "0.82rem", color: "var(--tx-2)" }}>Codec</span>
-            <div className="main-preferences-options main-preferences-options-inline">
-              {(["auto", "H264", "H265", "AV1"] as const).map((codec) => (
-                <button
-                  key={codec}
-                  type="button"
-                  className={`main-preferences-option main-preferences-option-sm${settings.requestedCodec === codec ? " is-active" : ""}`}
-                  onClick={() => update({ requestedCodec: codec })}
-                >
-                  {codec === "auto" ? "Auto" : codec}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
-            <span style={{ fontSize: "0.82rem", color: "var(--tx-2)" }}>FPS</span>
-            <div className="main-preferences-options main-preferences-options-inline">
-              {([30, 60] as const).map((fps) => (
-                <button
-                  key={fps}
-                  type="button"
-                  className={`main-preferences-option main-preferences-option-sm${settings.requestedFps === fps ? " is-active" : ""}`}
-                  onClick={() => update({ requestedFps: fps })}
-                >
-                  {fps}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <span style={{ fontSize: "0.82rem", color: "var(--tx-2)" }}>{bitrateLabel(settings.requestedBitrateKbps)}</span>
-            <input
-              type="range"
-              className="pref-slider"
-              min={0}
-              max={80}
-              step={1}
-              value={settings.requestedBitrateKbps ? Math.min(80, settings.requestedBitrateKbps / 1000) : 0}
-              onChange={(e) => {
-                const value = Number(e.target.value);
-                update({ requestedBitrateKbps: value === 0 ? null : value * 1000 });
-              }}
-              style={{ maxWidth: 132 }}
-            />
           </div>
         </div>
 
