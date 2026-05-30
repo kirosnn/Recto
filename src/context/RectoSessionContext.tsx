@@ -100,7 +100,10 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
     setError("");
     try {
       const videoConstraints: MediaTrackConstraints & { cursor?: string } = {
-        frameRate: { ideal: settings.targetFps, min: settings.targetFps >= 60 ? 45 : 24, max: settings.targetFps },
+        // No `min` framerate: a hard floor makes the capturer duplicate frames
+        // when the screen is static, wasting bitrate on redundant data. Letting
+        // it idle frees that bandwidth for actual motion and keeps FPS stable.
+        frameRate: { ideal: settings.targetFps, max: settings.targetFps },
         cursor: "always",
         resizeMode: "none",
       };
