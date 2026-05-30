@@ -102,7 +102,7 @@ export default function VersoPage() {
     });
 
     try {
-      await conn.current.connect(trimmed, settings.requestedCodec);
+      await conn.current.connect(trimmed, settings.requestedCodec, settings.lowLatencyMode);
     } catch (e: unknown) {
       setError((e as Error).message || "Connexion échouée");
       setStatus("error");
@@ -180,6 +180,7 @@ export default function VersoPage() {
           hostHeight={hostSize.h}
           hideUI={hideUI}
           onToggleUI={() => setHideUI((v) => !v)}
+          setLowLatency={(enabled) => conn.current?.setLowLatency(enabled)}
         />
         {conn.current && (
           <StatsOverlay
