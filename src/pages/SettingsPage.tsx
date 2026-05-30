@@ -12,9 +12,9 @@ import {
 } from "../lib/settings";
 
 const PRESET_LABELS: Record<Exclude<QualityPreset, "custom">, { label: string; hint: string }> = {
-  quality:     { label: "Qualité",     hint: "LAN · 1440p–4K@60fps · 50 Mbps" },
-  balanced:    { label: "Équilibré",   hint: "Fibre · 1080p@60fps · 20 Mbps" },
-  performance: { label: "Performance", hint: "ADSL/4G · 1080p@30fps · 8 Mbps" },
+  quality:     { label: "Qualité",     hint: "LAN · 1440p–4K@60fps · 120 Mbps" },
+  balanced:    { label: "Équilibré",   hint: "Fibre · 1080p–1440p@60fps · 50 Mbps" },
+  performance: { label: "Performance", hint: "4G/ADSL · 1080p@30fps · 20 Mbps" },
 };
 
 const RESOLUTION_LABELS: Record<Resolution, string> = {
@@ -178,8 +178,8 @@ export default function SettingsPage() {
               onChange={(e) => update({ maxBitrateKbps: bitrateStepToKbps(Number(e.target.value)), preset: "custom" })}
             />
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: "0.68rem", color: "var(--tx-3)" }}>
-              <span>3 Mbps</span>
-              <span>80 Mbps</span>
+              <span>8 Mbps</span>
+              <span>160 Mbps</span>
               <span>∞</span>
             </div>
           </Block>
