@@ -38,6 +38,12 @@ class MockRTCPeerConnection {
   localDescription: RTCSessionDescriptionInit | null = null;
   remoteDescription: RTCSessionDescriptionInit | null = null;
   iceConnectionState: RTCIceConnectionState = "new";
+  // "complete" so waitForIceGathering() resolves immediately without needing
+  // real event plumbing (candidates are still emitted via setLocalDescription).
+  iceGatheringState: RTCIceGatheringState = "complete";
+
+  addEventListener() {}
+  removeEventListener() {}
 
   onicecandidate: ((e: { candidate: RTCIceCandidate | null }) => void) | null = null;
   oniceconnectionstatechange: (() => void) | null = null;
@@ -59,6 +65,37 @@ class MockRTCPeerConnection {
     const ch = new MockRTCDataChannel(label);
     this._dataChannels.set(label, ch);
     return ch as unknown as MockRTCDataChannel;
+  }
+
+  // Minimal transceiver/sender/receiver surface so the real codec-preference and
+  // encoder-tuning code paths run under test instead of throwing.
+  getTransceivers() {
+    const transceivers = this._tracks.map((t) => ({
+      sender: { track: t },
+      receiver: { track: { kind: t.kind } },
+      setCodecPreferences: () => {},
+    }));
+    // Verso has no local tracks but still receives video — expose a receiver.
+    if (!transceivers.some((tr) => tr.receiver.track.kind === "video")) {
+      transceivers.push({
+        sender: { track: null as unknown as MediaStreamTrack },
+        receiver: { track: { kind: "video" } },
+        setCodecPreferences: () => {},
+      });
+    }
+    return transceivers;
+  }
+
+  getSenders() {
+    return this._tracks.map((t) => ({
+      track: t,
+      getParameters: () => ({ encodings: [{}] }),
+      setParameters: async () => {},
+    }));
+  }
+
+  getReceivers() {
+    return [{ track: { kind: "video" } }];
   }
 
   async createOffer(): Promise<RTCSessionDescriptionInit> {
@@ -181,6 +218,10 @@ class MockMediaStreamTrack {
 vi.stubGlobal("RTCPeerConnection", MockRTCPeerConnection);
 vi.stubGlobal("MediaStream", MockMediaStream);
 vi.stubGlobal("MediaStreamTrack", MockMediaStreamTrack);
+// Codec capability statics — return null so setCodecPreferences is skipped
+// gracefully (the loopback tests don't assert on negotiated codecs).
+vi.stubGlobal("RTCRtpSender", { getCapabilities: () => null });
+vi.stubGlobal("RTCRtpReceiver", { getCapabilities: () => null });
 
 const mockGetDisplayMedia = vi.fn();
 vi.stubGlobal("navigator", {
