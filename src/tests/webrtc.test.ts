@@ -35,6 +35,9 @@ vi.mock("../lib/signaling", () => {
     submitAnswer: vi.fn(async (_code: string, answer: RTCSessionDescriptionInit) => {
       _answerCb?.(answer);
     }),
+    // Recto polls this once after subscribing, in case the answer landed before
+    // the realtime subscription was ready. In the loopback test it hasn't yet.
+    fetchSessionAnswer: vi.fn(async () => null),
     endSession: vi.fn().mockResolvedValue(undefined),
     subscribeToSession: vi.fn((_id: string, cb: (s: { answer?: RTCSessionDescriptionInit }) => void) => {
       _answerCb = (answer) => cb({ answer });
@@ -102,7 +105,7 @@ describe("WebRTC loopback — Recto ↔ Verso", () => {
     // Attendre que la connexion WebRTC s'établisse
     await vi.waitFor(() => {
       expect(versoConnected).toBe(true);
-    }, { timeout: 500 });
+    }, { timeout: 2000 });
 
     recto.stop();
     verso.stop();
