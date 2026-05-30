@@ -94,27 +94,32 @@ async function tuneVideoSender(pc: RTCPeerConnection, settings: StreamSettings) 
     if (!params.encodings.length) params.encodings = [{}];
     const enc = params.encodings[0];
     enc.maxFramerate = settings.targetFps;
+    enc.scaleResolutionDownBy = 1;
     if (settings.maxBitrateKbps !== null) {
       enc.maxBitrate = settings.maxBitrateKbps * 1000;
+      (enc as Record<string, unknown>).minBitrate = Math.floor(settings.maxBitrateKbps * 1000 * 0.35);
     } else {
       delete enc.maxBitrate;
+      delete (enc as Record<string, unknown>).minBitrate;
     }
-    // When bandwidth is constrained: reduce resolution, not FPS.
-    // FPS drops feel much worse than a slight blur.
-    (enc as Record<string, unknown>).degradationPreference = "maintain-framerate";
+    (params as RTCRtpSendParameters & { degradationPreference?: string }).degradationPreference =
+      settings.preset === "quality" ? "maintain-resolution" : "balanced";
     (enc as Record<string, unknown>).priority = "high";
     (enc as Record<string, unknown>).networkPriority = "high";
-    // L1T1 = no scalability layers → single-quality, lowest latency
     (enc as Record<string, unknown>).scalabilityMode = "L1T1";
     await sender.setParameters(params);
   } catch {}
 }
 
-// Apply screen-share content hint so the encoder favours sharpness over motion
-function applyContentHint(stream: MediaStream) {
+function applyContentHint(stream: MediaStream, settings: StreamSettings) {
+  const contentHint =
+    settings.targetFps >= 60 && (settings.maxBitrateKbps === null || settings.maxBitrateKbps >= 50_000)
+      ? "motion"
+      : "detail";
+
   for (const track of stream.getVideoTracks()) {
     try {
-      (track as MediaStreamTrack & { contentHint: string }).contentHint = "detail";
+      (track as MediaStreamTrack & { contentHint: string }).contentHint = contentHint;
     } catch {}
   }
 }
@@ -192,9 +197,10 @@ export class RectoConnection {
   }
 
   async start(stream: MediaStream) {
-    applyContentHint(stream);
+    applyContentHint(stream, this.settings);
     stream.getTracks().forEach((t) => this.pc.addTrack(t, stream));
     setCodecPreference(this.pc, this.settings.codec);
+    await tuneVideoSender(this.pc, this.settings);
 
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
