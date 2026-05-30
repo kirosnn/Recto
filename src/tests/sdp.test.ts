@@ -49,7 +49,9 @@ describe("applyBitrateToSdp", () => {
   it("sans cap de bitrate (illimité), pas de b=AS mais un start-bitrate par défaut", () => {
     const out = applyBitrateToSdp(SAMPLE_SDP, { ...DEFAULTS, maxBitrateKbps: null });
     expect(out).not.toContain("b=AS:");
-    expect(out).toContain("x-google-start-bitrate=16000");
+    // Start modéré : l'estimateur de bande passante monte tout seul, on ne veut
+    // pas saturer le lien dès les premières frames (cf. fix collapse spiral).
+    expect(out).toContain("x-google-start-bitrate=6000");
     expect(out).not.toContain("x-google-max-bitrate");
   });
 
