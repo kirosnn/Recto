@@ -145,6 +145,7 @@ export type VersoCallbacks = {
   onDisplayInfo: (width: number, height: number) => void;
   onIdentity: (identity: PeerIdentity) => void;
   onHwCaps?: (caps: HwEncoderCaps) => void;
+  onClientSettings?: (s: { maxBitrateKbps: number | null; targetFps: 30 | 60; codec: StreamSettings["codec"] }) => void;
 };
 
 export class RectoConnection {
@@ -264,6 +265,12 @@ export class VersoConnection {
               amf: !!data.amf,
               qsv: !!data.qsv,
             });
+          } else if (data.type === "clientSettings" && this.cb.onClientSettings) {
+            this.cb.onClientSettings({
+              maxBitrateKbps: data.maxBitrateKbps ?? null,
+              targetFps: data.targetFps ?? 60,
+              codec: data.codec ?? "auto",
+            });
           }
         } catch {}
       };
@@ -292,17 +299,53 @@ export class VersoConnection {
     };
   }
 
-  async connect(code: string) {
+  async connect(code: string, requestedCodec: StreamSettings["codec"] = "auto") {
     const session = await fetchSession(code);
     if (!session.offer) throw new Error("Pas d'offre disponible");
 
     await this.pc.setRemoteDescription(session.offer);
+    this.setReceiverCodecPreference(requestedCodec);
     const answer = await this.pc.createAnswer();
     await this.pc.setLocalDescription(answer);
     await waitForIceGathering(this.pc);
     const completeAnswer = this.pc.localDescription!;
 
     await submitAnswer(code, completeAnswer);
+  }
+
+  private setReceiverCodecPreference(codec: StreamSettings["codec"]) {
+    for (const transceiver of this.pc.getTransceivers()) {
+      if (transceiver.receiver.track.kind !== "video") continue;
+      const caps = RTCRtpReceiver.getCapabilities("video");
+      if (!caps) continue;
+
+      const all = caps.codecs;
+      const h264 = all.filter((c) => c.mimeType === "video/H264");
+      const h265 = all.filter((c) => c.mimeType === "video/H265");
+      const av1 = all.filter((c) => c.mimeType === "video/AV1");
+      const vp9 = all.filter((c) => c.mimeType === "video/VP9");
+      const rest = all.filter((c) => !["video/H264", "video/H265", "video/AV1", "video/VP9"].includes(c.mimeType));
+
+      let sorted: typeof all;
+      switch (codec) {
+        case "H264":
+          sorted = [...h264, ...h265, ...av1, ...vp9, ...rest];
+          break;
+        case "H265":
+          sorted = [...h265, ...h264, ...av1, ...vp9, ...rest];
+          break;
+        case "AV1":
+          sorted = [...av1, ...h265, ...h264, ...vp9, ...rest];
+          break;
+        case "VP9":
+          sorted = [...vp9, ...h265, ...h264, ...av1, ...rest];
+          break;
+        default:
+          sorted = [...h265, ...av1, ...h264, ...vp9, ...rest];
+      }
+
+      try { transceiver.setCodecPreferences(sorted.filter(Boolean)); } catch {}
+    }
   }
 
   getStats(): Promise<RTCStatsReport> {
