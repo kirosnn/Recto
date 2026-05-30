@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { VersoConnection, type PeerIdentity, type HwEncoderCaps } from "../lib/webrtc";
 import { useAuth } from "../context/useAuth";
+import { useSettings } from "../context/SettingsContext";
 import { identityFromUser } from "../lib/identity";
 import VideoDisplay from "../components/VideoDisplay";
 import PeerBadge from "../components/PeerBadge";
@@ -17,6 +18,7 @@ const setFullscreen = (v: boolean) => {
 
 export default function VersoPage() {
   const { user } = useAuth();
+  const { settings } = useSettings();
   const [status, setStatus] = useState<Status>("idle");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
@@ -64,7 +66,7 @@ export default function VersoPage() {
     });
 
     try {
-      await conn.current.connect(trimmed);
+      await conn.current.connect(trimmed, settings.requestedCodec);
     } catch (e: unknown) {
       setError((e as Error).message || "Connexion échouée");
       setStatus("error");
@@ -111,6 +113,27 @@ export default function VersoPage() {
       clearTimeout(t2);
     };
   }, [inputChannel, user]);
+
+  useEffect(() => {
+    if (!inputChannel) return;
+    const send = () => {
+      if (inputChannel.readyState === "open") {
+        inputChannel.send(JSON.stringify({
+          type: "clientSettings",
+          maxBitrateKbps: settings.requestedBitrateKbps,
+          targetFps: settings.requestedFps,
+          codec: settings.requestedCodec,
+        }));
+      }
+    };
+    send();
+    const t1 = setTimeout(send, 500);
+    const t2 = setTimeout(send, 1500);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [inputChannel, settings.requestedBitrateKbps, settings.requestedFps, settings.requestedCodec]);
 
   if (status === "connected" || (status === "connecting" && stream)) {
     return (
