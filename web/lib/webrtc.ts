@@ -75,7 +75,11 @@ export class WebVersoConnection {
     };
   }
 
-  async connect(code: string, requestedCodec: WebClientSettings["requestedCodec"] = "auto") {
+  async connect(
+    code: string,
+    requestedCodec: WebClientSettings["requestedCodec"] = "auto",
+    lowLatency = true
+  ) {
     const session = await fetchSession(code);
     if (!session.offer) throw new Error("Pas d'offre disponible");
 
@@ -83,6 +87,10 @@ export class WebVersoConnection {
 
     // Prefer hardware-efficient codecs on the receiving side (influences what Recto sends)
     this.setReceiverCodecPreference(requestedCodec);
+
+    // Receivers exist once the offer is applied — tune them for low latency
+    // before answering so the first decoded frames render immediately.
+    this.applyReceiverLatencyHints(lowLatency);
 
     const answer = await this.pc.createAnswer();
     await this.pc.setLocalDescription(answer);
@@ -115,6 +123,29 @@ export class WebVersoConnection {
         default:     sorted = [...h265, ...av1, ...h264hw, ...vp9, ...rest]; // auto: best efficiency first
       }
       try { transceiver.setCodecPreferences(sorted.filter(Boolean)); } catch {}
+    }
+  }
+
+  // Trim receive-side buffering for responsive input. playoutDelayHint and
+  // jitterBufferTarget live on RTCRtpReceiver (not the <video> element — a
+  // common mistake that silently no-ops). 0 = render frames as they arrive.
+  setLowLatency(enabled: boolean) {
+    this.applyReceiverLatencyHints(enabled);
+  }
+
+  private applyReceiverLatencyHints(enabled: boolean) {
+    for (const r of this.pc.getReceivers()) {
+      if (r.track?.kind !== "video") continue;
+      try {
+        (r as RTCRtpReceiver & { playoutDelayHint?: number }).playoutDelayHint =
+          enabled ? 0 : undefined;
+      } catch {}
+      try {
+        if ("jitterBufferTarget" in r) {
+          (r as RTCRtpReceiver & { jitterBufferTarget?: number | null }).jitterBufferTarget =
+            enabled ? 0 : null;
+        }
+      } catch {}
     }
   }
 
