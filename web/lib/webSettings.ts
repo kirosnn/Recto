@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 
 export interface WebClientSettings {
+  qualityTuningVersion: number;
   /** Mouse move throttle in ms (0 = no throttle). */
   inputThrottleMs: 0 | 16 | 33;
   /** video objectFit mode. */
@@ -24,13 +25,14 @@ export interface WebClientSettings {
 }
 
 export const WEB_DEFAULTS: WebClientSettings = {
+  qualityTuningVersion: 2,
   inputThrottleMs: 0,
   displayMode: "contain",
   showStats: false,
   lowLatencyMode: true,
   hardwareDecode: true,
   touchSensitivity: 1.0,
-  requestedBitrateKbps: null,
+  requestedBitrateKbps: 50_000,
   requestedFps: 60,
   requestedCodec: "auto",
 };
@@ -41,7 +43,18 @@ function load(): WebClientSettings {
   if (typeof window === "undefined") return WEB_DEFAULTS;
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? { ...WEB_DEFAULTS, ...JSON.parse(raw) } : WEB_DEFAULTS;
+    if (!raw) return WEB_DEFAULTS;
+
+    const stored = JSON.parse(raw) as Partial<WebClientSettings>;
+    const migrated: Partial<WebClientSettings> = { ...stored };
+    if ((stored.qualityTuningVersion ?? 0) < 2) {
+      if (stored.requestedBitrateKbps === null || stored.requestedBitrateKbps === undefined) {
+        migrated.requestedBitrateKbps = 50_000;
+      }
+      migrated.qualityTuningVersion = 2;
+    }
+
+    return { ...WEB_DEFAULTS, ...migrated };
   } catch {
     return WEB_DEFAULTS;
   }
