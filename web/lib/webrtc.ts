@@ -1,4 +1,5 @@
 import { fetchSession, submitAnswer } from "./signaling";
+import type { WebClientSettings } from "./webSettings";
 
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
@@ -74,19 +75,47 @@ export class WebVersoConnection {
     };
   }
 
-  async connect(code: string) {
+  async connect(code: string, requestedCodec: WebClientSettings["requestedCodec"] = "auto") {
     const session = await fetchSession(code);
     if (!session.offer) throw new Error("Pas d'offre disponible");
 
     await this.pc.setRemoteDescription(session.offer);
+
+    // Prefer hardware-efficient codecs on the receiving side (influences what Recto sends)
+    this.setReceiverCodecPreference(requestedCodec);
+
     const answer = await this.pc.createAnswer();
     await this.pc.setLocalDescription(answer);
 
-    // Attendre que toutes les candidates ICE soient dans le SDP
     await waitForIceGathering(this.pc);
     const completeAnswer = this.pc.localDescription!;
 
     await submitAnswer(code, completeAnswer);
+  }
+
+  private setReceiverCodecPreference(codec: WebClientSettings["requestedCodec"]) {
+    for (const transceiver of this.pc.getTransceivers()) {
+      if (transceiver.receiver.track.kind !== "video") continue;
+      const caps = RTCRtpReceiver.getCapabilities("video");
+      if (!caps) continue;
+
+      const all = caps.codecs;
+      const h264hw  = all.filter(c => c.mimeType === "video/H264");
+      const h265    = all.filter(c => c.mimeType === "video/H265");
+      const av1     = all.filter(c => c.mimeType === "video/AV1");
+      const vp9     = all.filter(c => c.mimeType === "video/VP9");
+      const rest    = all.filter(c => !["video/H264","video/H265","video/AV1","video/VP9"].includes(c.mimeType));
+
+      let sorted: typeof all;
+      switch (codec) {
+        case "H264": sorted = [...h264hw, ...h265, ...av1, ...vp9, ...rest]; break;
+        case "H265": sorted = [...h265, ...h264hw, ...av1, ...vp9, ...rest]; break;
+        case "AV1":  sorted = [...av1, ...h265, ...h264hw, ...vp9, ...rest]; break;
+        case "VP9":  sorted = [...vp9, ...h265, ...h264hw, ...av1, ...rest]; break;
+        default:     sorted = [...h265, ...av1, ...h264hw, ...vp9, ...rest]; // auto: best efficiency first
+      }
+      try { transceiver.setCodecPreferences(sorted.filter(Boolean)); } catch {}
+    }
   }
 
   getStats(): Promise<RTCStatsReport> {
