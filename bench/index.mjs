@@ -93,12 +93,25 @@ async function main() {
 
   let browser;
   try {
-    browser = await chromium.launch({
-      headless: true,
-      args: ['--disable-web-security', '--allow-file-access-from-files'],
-    });
-  } catch {
-    console.error(`\n${RED}Playwright introuvable. Exécute d'abord: npm install && npm run setup${R}`);
+    process.stdout.write(`\r${DIM}Lancement Chromium (headless)…${R}`);
+    browser = await Promise.race([
+      chromium.launch({
+        headless: true,
+        args: [
+          '--disable-web-security',
+          '--allow-file-access-from-files',
+          '--disable-dev-shm-usage',
+          '--no-sandbox',
+          '--disable-setuid-sandbox'
+        ],
+      }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('Launch timeout (30s)')), 30000))
+    ]);
+    process.stdout.write(`\r${DIM}Navigateur prêt.${R}\n`);
+  } catch (e) {
+    console.error(`\n${RED}Échec lancement Chromium: ${e.message}${R}`);
+    console.error(`${DIM}→ Exécute: cd bench && npm run setup${R}`);
+    console.error(`${DIM}→ Vérifie que Playwright Chromium est bien installé (pas de proxy/antivirus bloquant).${R}`);
     process.exit(1);
   }
 
