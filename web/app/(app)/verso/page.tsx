@@ -242,29 +242,6 @@ export default function VersoPage() {
     >
       <BackButton href="/" />
 
-      {/* Avertissement recommandé d'utiliser l'app */}
-      <div
-        style={{
-          maxWidth: 420,
-          margin: "0 auto 24px",
-          padding: "18px 22px",
-          background: "var(--surface)",
-          border: "1px solid var(--border-2)",
-          borderRadius: 16,
-          fontSize: "0.9rem",
-          color: "var(--tx-2)",
-          textAlign: "center",
-          lineHeight: 1.45,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
-        }}
-      >
-        <div style={{ color: "#d97757", fontWeight: 600, marginBottom: 4 }}>
-          Recommandé
-        </div>
-        Utilisez l’application <strong>Recto</strong> (Windows) pour streamer.<br />
-        Le client web est expérimental et limité.
-      </div>
-
       <div
         className="recto-form-inner"
         style={{ width: "100%", maxWidth: "360px" }}
@@ -395,70 +372,108 @@ export default function VersoPage() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.75)",
+            background: "rgba(0, 0, 0, 0.85)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             zIndex: 100,
             padding: "20px",
           }}
-          onClick={() => setShowModal(false)}
         >
           <div
             style={{
-              maxWidth: 460,
+              position: "relative",
+              maxWidth: 480,
+              width: "100%",
               background: "var(--surface)",
               border: "1px solid var(--border-2)",
               borderRadius: 20,
-              padding: "32px 28px",
-              boxShadow: "0 20px 40px rgba(0,0,0,0.25)",
+              padding: "40px 32px 32px",
+              boxShadow: "0 25px 50px -12px rgb(0 0 0 / 0.4)",
               textAlign: "center",
               color: "var(--tx)",
             }}
-            onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ fontSize: "2.2rem", marginBottom: 12 }}>🪟</div>
-            <h2 style={{ margin: "0 0 16px", fontSize: "1.35rem", color: "var(--tx)" }}>
-              Utilisez Recto (application desktop)
+            {/* Close button */}
+            <button
+              onClick={() => setShowModal(false)}
+              style={{
+                position: "absolute",
+                top: 16,
+                right: 16,
+                width: 36,
+                height: 36,
+                border: "none",
+                background: "none",
+                color: "var(--tx-3)",
+                fontSize: "28px",
+                lineHeight: 1,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              aria-label="Fermer"
+            >
+              ×
+            </button>
+
+            <div style={{ fontSize: "3rem", marginBottom: 8 }}>🖥️</div>
+
+            <h2 style={{ margin: "0 0 20px", fontSize: "1.55rem", fontWeight: 600, color: "var(--tx)" }}>
+              Application Recto recommandée
             </h2>
-            <p style={{ margin: "0 0 24px", lineHeight: 1.55, color: "var(--tx-2)", fontSize: "1.02rem" }}>
-              Pour streamer avec une latence minimale et une qualité optimale,<br />
-              il est <strong>fortement recommandé</strong> d’utiliser l’application Recto sur Windows.<br /><br />
-              Le client web est expérimental et ne permet pas un streaming stable.
-            </p>
-            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+
+            <div style={{ marginBottom: 28, fontSize: "1.02rem", lineHeight: 1.6, color: "var(--tx-2)" }}>
+              Pour une expérience de streaming complète, stable et avec une latence minimale,<br />
+              <strong>utilisez l’application Recto (Windows)</strong>.<br /><br />
+              Le client web est uniquement expérimental et ne supporte pas le streaming vidéo de qualité.
+            </div>
+
+            <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
               <button
                 onClick={() => setShowModal(false)}
                 style={{
-                  padding: "12px 28px",
-                  borderRadius: 12,
+                  padding: "14px 32px",
+                  borderRadius: 14,
                   border: "1px solid var(--border-2)",
                   background: "var(--bg-alt)",
                   color: "var(--tx)",
                   fontWeight: 500,
+                  fontSize: "0.95rem",
                   cursor: "pointer",
+                  transition: "all 0.2s",
                 }}
+                onMouseOver={(e) => (e.currentTarget.style.background = "var(--border)")}
+                onMouseOut={(e) => (e.currentTarget.style.background = "var(--bg-alt)")}
               >
-                Continuer sur web
+                Continuer sur le web
               </button>
+
               <a
-                href="https://github.com/kirosnn/Recto/releases"
+                href="https://github.com/kirosnn/Recto/releases/latest"
                 target="_blank"
                 style={{
-                  padding: "12px 28px",
-                  borderRadius: 12,
+                  padding: "14px 32px",
+                  borderRadius: 14,
                   background: "#d97757",
                   color: "white",
                   textDecoration: "none",
                   fontWeight: 600,
+                  fontSize: "0.95rem",
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: 8,
+                  gap: 10,
+                  boxShadow: "0 4px 12px rgba(217, 119, 87, 0.3)",
                 }}
               >
-                Télécharger Recto
+                ⬇️ Télécharger Recto
               </a>
             </div>
+
+            <p style={{ marginTop: 24, fontSize: "0.78rem", color: "var(--tx-3)" }}>
+              L’application desktop utilise l’accélération matérielle NVENC / AMF / QSV
+            </p>
           </div>
         </div>
       )}
