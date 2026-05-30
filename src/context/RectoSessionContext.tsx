@@ -137,15 +137,6 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
         },
         onDisconnected: () => stop(),
         onError: (e) => { setError(e); setStatus("error"); },
-        onClientSettings: (req) => {
-          // Apply client-requested quality settings (bitrate, fps, codec)
-          update({
-            maxBitrateKbps: req.maxBitrateKbps ?? settings.maxBitrateKbps,
-            targetFps: req.targetFps,
-            codec: req.codec,
-            preset: "custom",
-          });
-        },
       }, settings);
 
       const inputCh = conn.current.getInputChannel();
@@ -201,6 +192,15 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
             // Verso announces who it is — show it in the UI, don't inject it
             if (event.type === "identity") {
               setPeer({ name: event.name, avatar: event.avatar ?? null });
+              return;
+            }
+            if (event.type === "clientSettings") {
+              update({
+                maxBitrateKbps: event.maxBitrateKbps ?? settings.maxBitrateKbps,
+                targetFps: event.targetFps ?? settings.targetFps,
+                codec: event.codec ?? settings.codec,
+                preset: "custom",
+              });
               return;
             }
             lastInputRef.current = {
