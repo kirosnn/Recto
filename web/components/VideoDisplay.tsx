@@ -10,6 +10,7 @@ interface VideoDisplayProps {
   hostHeight: number;
   hideUI: boolean;
   onToggleUI: () => void;
+  setLowLatency?: (enabled: boolean) => void;
 }
 
 // Derive a host-side key `code` (e.g. "KeyA") from a keyboard event. Hardware
@@ -46,6 +47,7 @@ export default function VideoDisplay({
   hostHeight,
   hideUI,
   onToggleUI,
+  setLowLatency,
 }: VideoDisplayProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -64,9 +66,8 @@ export default function VideoDisplay({
       video.playsInline = true;
       video.disablePictureInPicture = true;
       video.muted = true; // required for autoplay on mobile
-      (video as HTMLVideoElement & { playoutDelayHint?: number }).playoutDelayHint = settings.lowLatencyMode ? 0 : undefined;
     }
-  }, [stream, settings.lowLatencyMode]);
+  }, [stream]);
 
   useEffect(() => {
     containerRef.current?.focus();
@@ -90,20 +91,12 @@ export default function VideoDisplay({
     [inputChannel]
   );
 
-  // Apply low-latency receiver hints when connected
+  // Low-latency tuning belongs on the RTCRtpReceiver (playoutDelayHint /
+  // jitterBufferTarget), which the connection owns — route it through there.
+  // (The old code read `inputChannel.pc`, which never exists, so it no-op'd.)
   useEffect(() => {
-    if (!inputChannel || !settings.lowLatencyMode) return;
-    const pc = (inputChannel as any).pc || null;
-    // Best-effort: reduce jitter buffer target on the video receiver
-    try {
-      const receivers = (pc as RTCPeerConnection)?.getReceivers?.() || [];
-      for (const r of receivers) {
-        if (r.track.kind === "video" && "jitterBufferTarget" in r) {
-          (r as any).jitterBufferTarget = 0;
-        }
-      }
-    } catch {}
-  }, [inputChannel, settings.lowLatencyMode]);
+    setLowLatency?.(settings.lowLatencyMode);
+  }, [stream, settings.lowLatencyMode, setLowLatency]);
 
   // Host pixels per CSS pixel, for relative (pointer-lock / trackpad) movement
   const getVideoScale = useCallback(() => {
