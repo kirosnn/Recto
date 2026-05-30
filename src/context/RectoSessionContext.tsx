@@ -1,5 +1,5 @@
 import { createContext, useContext, useRef, useState, useCallback, useEffect } from "react";
-import { RectoConnection } from "../lib/webrtc";
+import { RectoConnection, logWebRTCDiagnostics } from "../lib/webrtc";
 import { endSession } from "../lib/signaling";
 import { identityFromUser } from "../lib/identity";
 import { useAuth } from "./useAuth";
@@ -81,6 +81,7 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
 
   const conn = useRef<RectoConnection | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const diagRef = useRef<ReturnType<typeof setInterval> | null>(null); // TEMP DIAGNOSTIC
   const lastInputRef = useRef<InputDebug>({ summary: "", count: 0 });
 
   // Re-apply encoding parameters whenever settings change mid-session
@@ -89,6 +90,7 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
 
   const stop = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (diagRef.current) { clearInterval(diagRef.current); diagRef.current = null; } // TEMP DIAGNOSTIC
     if (code) endSession(code).catch(() => {});
     conn.current?.stop(); conn.current = null;
     setStatus("idle"); setCode(""); setDuration(0); setError(""); setPeer(null);
@@ -125,6 +127,13 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
         onConnected: () => {
           setStatus("connected");
           timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
+          // TEMP DIAGNOSTIC (à retirer) — dump sender stats every 2s
+          diagRef.current = setInterval(async () => {
+            try {
+              const r = await conn.current?.getStats();
+              if (r) logWebRTCDiagnostics(r, "RECTO");
+            } catch {}
+          }, 2000);
         },
         onDisconnected: () => stop(),
         onError: (e) => { setError(e); setStatus("error"); },
