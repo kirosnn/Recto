@@ -24,6 +24,7 @@ export default function VersoPage() {
   // Ctrl+Alt+H hides the on-video overlays for an immersive view
   const [hideUI, setHideUI] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [showModal, setShowModal] = useState(true);
   const conn = useRef<WebVersoConnection | null>(null);
   const { settings } = useWebSettings();
   // Our own Discord identity, sent to Recto once the input channel opens
@@ -387,6 +388,80 @@ export default function VersoPage() {
           }
         `}</style>
       </div>
+
+      {/* Modal d'avertissement à l'arrivée sur Verso */}
+      {showModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+            padding: "20px",
+          }}
+          onClick={() => setShowModal(false)}
+        >
+          <div
+            style={{
+              maxWidth: 460,
+              background: "var(--surface)",
+              border: "1px solid var(--border-2)",
+              borderRadius: 20,
+              padding: "32px 28px",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.25)",
+              textAlign: "center",
+              color: "var(--tx)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontSize: "2.2rem", marginBottom: 12 }}>🪟</div>
+            <h2 style={{ margin: "0 0 16px", fontSize: "1.35rem", color: "var(--tx)" }}>
+              Utilisez Recto (application desktop)
+            </h2>
+            <p style={{ margin: "0 0 24px", lineHeight: 1.55, color: "var(--tx-2)", fontSize: "1.02rem" }}>
+              Pour streamer avec une latence minimale et une qualité optimale,<br />
+              il est <strong>fortement recommandé</strong> d’utiliser l’application Recto sur Windows.<br /><br />
+              Le client web est expérimental et ne permet pas un streaming stable.
+            </p>
+            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+              <button
+                onClick={() => setShowModal(false)}
+                style={{
+                  padding: "12px 28px",
+                  borderRadius: 12,
+                  border: "1px solid var(--border-2)",
+                  background: "var(--bg-alt)",
+                  color: "var(--tx)",
+                  fontWeight: 500,
+                  cursor: "pointer",
+                }}
+              >
+                Continuer sur web
+              </button>
+              <a
+                href="https://github.com/kirosnn/Recto/releases"
+                target="_blank"
+                style={{
+                  padding: "12px 28px",
+                  borderRadius: 12,
+                  background: "#d97757",
+                  color: "white",
+                  textDecoration: "none",
+                  fontWeight: 600,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                Télécharger Recto
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
