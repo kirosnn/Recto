@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { VersoConnection, type PeerIdentity, type HwEncoderCaps } from "../lib/webrtc";
+import { VersoConnection, logWebRTCDiagnostics, type PeerIdentity, type HwEncoderCaps } from "../lib/webrtc";
 import { useAuth } from "../context/useAuth";
 import { useSettings } from "../context/SettingsContext";
 import { identityFromUser } from "../lib/identity";
@@ -88,6 +88,18 @@ export default function VersoPage() {
   };
 
   useEffect(() => () => conn.current?.stop(), []);
+
+  // TEMP DIAGNOSTIC (à retirer) — dump receiver stats every 2s once connected
+  useEffect(() => {
+    if (status !== "connected") return;
+    const id = setInterval(async () => {
+      try {
+        const r = await conn.current?.getStats();
+        if (r) logWebRTCDiagnostics(r, "VERSO");
+      } catch {}
+    }, 2000);
+    return () => clearInterval(id);
+  }, [status]);
 
   // Announce our Discord identity to Recto once the input channel opens. Sent a
   // few times because the channel is unreliable (maxRetransmits: 0).
