@@ -3,11 +3,42 @@
 import { useTheme } from "../../../components/ThemeProvider";
 import { useWebSettings } from "../../../lib/webSettings";
 import { useRouter } from "next/navigation";
+import {
+  BITRATE_STEPS_MBPS,
+  bitrateStepToKbps,
+  kbpsToStepIdx,
+  bitrateLabel,
+  type QualityPreset,
+  type Resolution,
+} from "../../../../src/lib/settings";
+
+const PRESET_LABELS: Record<Exclude<QualityPreset, "custom">, { label: string; hint: string }> = {
+  quality:     { label: "Qualité",     hint: "LAN · 1440p–4K@60fps · 120 Mbps" },
+  balanced:    { label: "Équilibré",   hint: "Fibre · 1080p–1440p@60fps · 50 Mbps" },
+  performance: { label: "Performance", hint: "4G/ADSL · 1080p@30fps · 20 Mbps" },
+};
+
+const RESOLUTION_LABELS: Record<Resolution, string> = {
+  native: "Natif",
+  "1080p": "1080p",
+  "1440p": "1440p",
+  "4K": "4K",
+};
+
+const CODEC_INFO: Record<string, string> = {
+  H264:  "H.264 High Profile — compatible partout, accélération GPU universelle (NVENC/AMF/QSV)",
+  H265:  "H.265/HEVC — ~40% moins de bande passante que H264, navigateurs récents",
+  AV1:   "AV1 — ultra-efficace, GPU récents (NVIDIA RTX 30xx, AMD RDNA3, Intel Arc)",
+  VP9:   "VP9 — compatible tous navigateurs, CPU uniquement",
+  auto:  "Le navigateur choisit automatiquement le meilleur codec disponible",
+};
 
 export default function SettingsPage() {
   const router = useRouter();
   const { theme, toggle } = useTheme();
-  const { settings, update } = useWebSettings();
+  const { settings, update, applyPreset } = useWebSettings();
+
+  const bitrateIdx = kbpsToStepIdx(settings.maxBitrateKbps);
 
   return (
     <div style={{ minHeight: "100vh", padding: "clamp(56px,6vw,72px) clamp(16px,4vw,32px) 48px" }}>
@@ -39,6 +70,145 @@ export default function SettingsPage() {
           </Row>
         </Section>
 
+        <Section label="Hôte · Recto" sub="Paramètres de capture et d'encodage vidéo">
+          <Block label="Profil de qualité">
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {(Object.keys(PRESET_LABELS) as Exclude<QualityPreset, "custom">[]).map((p) => {
+                const { label, hint } = PRESET_LABELS[p];
+                const active = settings.preset === p;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => applyPreset(p)}
+                    style={{
+                      flex: "1 1 0",
+                      minWidth: 100,
+                      padding: "10px 12px",
+                      borderRadius: 12,
+                      border: active ? "1px solid transparent" : "1px solid var(--border-2)",
+                      background: active
+                        ? "linear-gradient(180deg,#505050 0%,#232323 45%,#161616 100%)"
+                        : "var(--bg-alt)",
+                      color: active ? "#f5f3ee" : "var(--tx)",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      transition: "all 160ms ease",
+                      boxShadow: active
+                        ? "inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(0,0,0,0.36), 0 4px 12px rgba(0,0,0,0.14)"
+                        : "none",
+                    }}
+                  >
+                    <div style={{ fontSize: "0.88rem", fontWeight: 600, letterSpacing: "-0.02em", marginBottom: 3 }}>{label}</div>
+                    <div style={{ fontSize: "0.72rem", color: active ? "rgba(245,243,238,0.6)" : "var(--tx-3)", lineHeight: 1.4 }}>{hint}</div>
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => update({ preset: "custom" })}
+                style={{
+                  flex: "1 1 0",
+                  minWidth: 80,
+                  padding: "10px 12px",
+                  borderRadius: 12,
+                  border: settings.preset === "custom" ? "1px solid transparent" : "1px solid var(--border-2)",
+                  background: settings.preset === "custom"
+                    ? "linear-gradient(180deg,#505050 0%,#232323 45%,#161616 100%)"
+                    : "var(--bg-alt)",
+                  color: settings.preset === "custom" ? "#f5f3ee" : "var(--tx)",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  transition: "all 160ms ease",
+                  boxShadow: settings.preset === "custom"
+                    ? "inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(0,0,0,0.36), 0 4px 12px rgba(0,0,0,0.14)"
+                    : "none",
+                }}
+              >
+                <div style={{ fontSize: "0.88rem", fontWeight: 600, letterSpacing: "-0.02em", marginBottom: 3 }}>Perso</div>
+                <div style={{ fontSize: "0.72rem", color: settings.preset === "custom" ? "rgba(245,243,238,0.6)" : "var(--tx-3)", lineHeight: 1.4 }}>Valeurs manuelles</div>
+              </button>
+            </div>
+          </Block>
+
+          <Block label="Codec vidéo">
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {(["H264", "H265", "AV1", "VP9", "auto"] as const).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={`pref-option pref-option-sm${settings.codec === c ? " is-active" : ""}`}
+                  onClick={() => update({ codec: c, preset: "custom" })}
+                  title={CODEC_INFO[c]}
+                >
+                  {c === "auto" ? "Auto" : c}
+                </button>
+              ))}
+            </div>
+            <p style={{ marginTop: 8, fontSize: "0.76rem", color: "var(--tx-3)", lineHeight: 1.5 }}>
+              {CODEC_INFO[settings.codec]}
+            </p>
+          </Block>
+
+          <Block label={`Bitrate max  ·  ${bitrateLabel(settings.maxBitrateKbps)}`}>
+            <input
+              type="range"
+              className="pref-slider"
+              min={0}
+              max={BITRATE_STEPS_MBPS.length}
+              step={1}
+              value={bitrateIdx}
+              onChange={(e) => update({ maxBitrateKbps: bitrateStepToKbps(Number(e.target.value)), preset: "custom" })}
+            />
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: "0.68rem", color: "var(--tx-3)" }}>
+              <span>8 Mbps</span>
+              <span>160 Mbps</span>
+              <span>∞</span>
+            </div>
+          </Block>
+
+          <Row label="FPS cible">
+            <div className="pref-options pref-options-inline">
+              {([30, 60] as const).map((fps) => (
+                <button
+                  key={fps}
+                  type="button"
+                  className={`pref-option pref-option-sm${settings.targetFps === fps ? " is-active" : ""}`}
+                  onClick={() => update({ targetFps: fps, preset: "custom" })}
+                >
+                  {fps}
+                </button>
+              ))}
+            </div>
+          </Row>
+
+          <Row label="Résolution capture">
+            <div className="pref-options pref-options-inline">
+              {(Object.keys(RESOLUTION_LABELS) as Resolution[]).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  className={`pref-option pref-option-sm${settings.resolution === r ? " is-active" : ""}`}
+                  onClick={() => update({ resolution: r })}
+                >
+                  {RESOLUTION_LABELS[r]}
+                </button>
+              ))}
+            </div>
+          </Row>
+
+          <Row label="Audio système" last>
+            <button
+              type="button"
+              className={`pref-toggle-pill${settings.audioEnabled ? " is-on" : ""}`}
+              onClick={() => update({ audioEnabled: !settings.audioEnabled })}
+              aria-pressed={settings.audioEnabled}
+            >
+              <span className="pref-toggle-pill-knob" />
+            </button>
+          </Row>
+        </Section>
+
         <Section label="Client · Verso" sub="Paramètres de contrôle à distance">
           <Row label="Latence souris">
             <div className="pref-options pref-options-inline">
@@ -61,14 +231,14 @@ export default function SettingsPage() {
 
           <Row label="Ajustement vidéo">
             <div className="pref-options pref-options-inline">
-              {(["contain", "cover"] as const).map((m) => (
+              {(["contain", "cover"] as const).map((mode) => (
                 <button
-                  key={m}
+                  key={mode}
                   type="button"
-                  className={`pref-option pref-option-sm${settings.displayMode === m ? " is-active" : ""}`}
-                  onClick={() => update({ displayMode: m })}
+                  className={`pref-option pref-option-sm${settings.displayMode === mode ? " is-active" : ""}`}
+                  onClick={() => update({ displayMode: mode })}
                 >
-                  {m === "contain" ? "Letterbox" : "Plein"}
+                  {mode === "contain" ? "Letterbox" : "Plein"}
                 </button>
               ))}
             </div>
@@ -96,74 +266,88 @@ export default function SettingsPage() {
             </button>
           </Row>
 
-          <Row label="Décodage matériel préféré">
-            <button
-              type="button"
-              className={`pref-toggle-pill${settings.hardwareDecode ? " is-on" : ""}`}
-              onClick={() => update({ hardwareDecode: !settings.hardwareDecode })}
-              aria-pressed={settings.hardwareDecode}
-            >
-              <span className="pref-toggle-pill-knob" />
-            </button>
-          </Row>
-
-          <Row label={`Sensibilité tactile · ${settings.touchSensitivity.toFixed(1)}×`} last>
+          <Block label={`Sensibilité manette virtuelle  ·  ${Math.round(settings.virtualGamepadSensitivity * 1000) / 10}`}>
             <input
               type="range"
               className="pref-slider"
-              min={0.5} max={2} step={0.1}
-              value={settings.touchSensitivity}
-              onChange={(e) => update({ touchSensitivity: parseFloat(e.target.value) })}
+              min={1} max={100} step={1}
+              value={Math.round(settings.virtualGamepadSensitivity * 1000)}
+              onChange={(e) => update({ virtualGamepadSensitivity: Number(e.target.value) / 1000 })}
             />
-          </Row>
-        </Section>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: "0.68rem", color: "var(--tx-3)" }}>
+              <span>Lent</span>
+              <span>Rapide</span>
+            </div>
+          </Block>
 
-        <Section label="Qualité demandée au Recto" sub="Ces paramètres sont envoyés à l'hôte quand vous vous connectez">
-          <Row label="Codec préféré">
-            <div className="pref-options pref-options-inline">
-              {(["auto", "H264", "H265", "AV1", "VP9"] as const).map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  className={`pref-option pref-option-sm${settings.requestedCodec === c ? " is-active" : ""}`}
-                  onClick={() => update({ requestedCodec: c })}
-                >
-                  {c === "auto" ? "Auto" : c}
-                </button>
+          <Block label="Qualité demandée au Recto">
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+                <span style={{ fontSize: "0.82rem", color: "var(--tx-2)" }}>Codec préféré</span>
+                <div className="pref-options pref-options-inline">
+                  {(["auto", "H264", "H265", "AV1", "VP9"] as const).map((codec) => (
+                    <button
+                      key={codec}
+                      type="button"
+                      className={`pref-option pref-option-sm${settings.requestedCodec === codec ? " is-active" : ""}`}
+                      onClick={() => update({ requestedCodec: codec })}
+                    >
+                      {codec === "auto" ? "Auto" : codec}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+                <span style={{ fontSize: "0.82rem", color: "var(--tx-2)" }}>FPS demandé</span>
+                <div className="pref-options pref-options-inline">
+                  {([30, 60] as const).map((fps) => (
+                    <button
+                      key={fps}
+                      type="button"
+                      className={`pref-option pref-option-sm${settings.requestedFps === fps ? " is-active" : ""}`}
+                      onClick={() => update({ requestedFps: fps })}
+                    >
+                      {fps}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 8, fontSize: "0.82rem", color: "var(--tx-2)" }}>
+                  <span>Bitrate max demandé</span>
+                  <span>{bitrateLabel(settings.requestedBitrateKbps)}</span>
+                </div>
+                <input
+                  type="range"
+                  className="pref-slider"
+                  min={0}
+                  max={80}
+                  step={1}
+                  value={settings.requestedBitrateKbps ? Math.min(80, settings.requestedBitrateKbps / 1000) : 0}
+                  onChange={(e) => {
+                    const value = Number(e.target.value);
+                    update({ requestedBitrateKbps: value === 0 ? null : value * 1000 });
+                  }}
+                />
+              </div>
+            </div>
+          </Block>
+
+          <Block label="Raccourcis en session" last>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {[
+                ["Ctrl+Alt+G", "Activer / désactiver la manette virtuelle"],
+                ["Ctrl+Alt+S", "Afficher les stats réseau en temps réel"],
+                ["Ctrl+Alt+H", "Masquer / afficher l'interface"],
+                ["Échap",      "Libérer la souris"],
+              ].map(([keys, desc]) => (
+                <div key={keys} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: "0.8rem" }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--tx-2)", background: "var(--bg-alt)", padding: "2px 7px", borderRadius: 5, border: "1px solid var(--border-2)", whiteSpace: "nowrap" }}>{keys}</span>
+                  <span style={{ color: "var(--tx-3)", textAlign: "right" }}>{desc}</span>
+                </div>
               ))}
             </div>
-          </Row>
-
-          <Row label="FPS demandé">
-            <div className="pref-options pref-options-inline">
-              {[30, 60].map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  className={`pref-option pref-option-sm${settings.requestedFps === f ? " is-active" : ""}`}
-                  onClick={() => update({ requestedFps: f as 30 | 60 })}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-          </Row>
-
-          <Row label={`Bitrate max demandé  ·  ${settings.requestedBitrateKbps ? settings.requestedBitrateKbps + " kbps" : "Illimité"}`} last>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input
-                type="range"
-                className="pref-slider"
-                min={0} max={80} step={1}
-                value={settings.requestedBitrateKbps ? Math.min(80, settings.requestedBitrateKbps / 1000) : 0}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  update({ requestedBitrateKbps: v === 0 ? null : v * 1000 });
-                }}
-              />
-              <button type="button" className="pref-option pref-option-sm" onClick={() => update({ requestedBitrateKbps: null })}>∞</button>
-            </div>
-          </Row>
+          </Block>
         </Section>
 
         <p style={{ textAlign: "center", fontSize: "0.72rem", color: "var(--tx-3)", marginTop: 8 }}>
@@ -209,6 +393,20 @@ function Row({ label, last, children }: { label: string; last?: boolean; childre
     }}>
       <span style={{ fontSize: "0.88rem", color: "var(--tx)", fontWeight: 500, whiteSpace: "nowrap" }}>{label}</span>
       <div style={{ flexShrink: 0 }}>{children}</div>
+    </div>
+  );
+}
+
+function Block({ label, last, children }: { label: string; last?: boolean; children: React.ReactNode }) {
+  return (
+    <div style={{
+      padding: "13px 18px",
+      borderBottom: last ? "none" : "1px solid var(--border)",
+    }}>
+      <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--tx-2)", marginBottom: 10, letterSpacing: "-0.01em" }}>
+        {label}
+      </div>
+      {children}
     </div>
   );
 }
