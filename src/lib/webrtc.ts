@@ -97,13 +97,13 @@ async function tuneVideoSender(pc: RTCPeerConnection, settings: StreamSettings) 
     enc.scaleResolutionDownBy = 1;
     if (settings.maxBitrateKbps !== null) {
       enc.maxBitrate = settings.maxBitrateKbps * 1000;
-      // Keep a modest floor so the encoder doesn't starve quality on detailed
-      // scenes, but low enough that it can adapt *down* under congestion. A high
-      // floor (e.g. 0.35×max ≈ 17.5 Mbps) forces the encoder to push more than a
-      // throttled link can carry → send-queue buildup → stalls/freezes. The
-      // x-google-start-bitrate SDP hint already ramps quality fast at connect,
-      // so a low floor here costs no startup sharpness.
-      (enc as Record<string, unknown>).minBitrate = Math.floor(settings.maxBitrateKbps * 1000 * 0.1);
+      // Absolute 400 kbps floor — NOT a fraction of max. A fractional floor
+      // (e.g. 0.1×50 Mbps = 5 Mbps) pins the encoder well above a weak peer's
+      // uplink capacity, so it permanently overshoots the link → constant loss →
+      // the bandwidth estimator collapses to a few hundred kbps and stays there
+      // (blur + freezes). An absolute low floor lets the encoder adapt all the
+      // way down to whatever the constrained peer can actually carry.
+      (enc as Record<string, unknown>).minBitrate = 400_000;
     } else {
       delete enc.maxBitrate;
       delete (enc as Record<string, unknown>).minBitrate;
@@ -128,12 +128,17 @@ async function tuneVideoSender(pc: RTCPeerConnection, settings: StreamSettings) 
 export function applyBitrateToSdp(sdp: string, settings: StreamSettings): string {
   try {
     const maxKbps = settings.maxBitrateKbps;
-    // Start high so quality ramps instantly, but capped so we don't overshoot a
-    // weak link on the very first frames (the estimator corrects down quickly).
-    const startKbps = maxKbps === null
-      ? 16_000
-      : Math.min(maxKbps, Math.max(4_000, Math.round(maxKbps * 0.6)));
-    const minKbps = maxKbps === null ? 4_000 : Math.round(maxKbps * 0.35);
+    // Start LOW and let the bandwidth estimator ramp UP. A high start (e.g. 60%
+    // of a 50 Mbps cap = 30 Mbps) floods a constrained peer's link on the very
+    // first frames → packet loss → the estimator collapses to a few hundred kbps
+    // and recovers only slowly (additive increase). On a weak/lossy return path
+    // (a peer with poor upload, whose RTCP feedback drives our estimate) this
+    // overshoot-collapse spiral is exactly what pins the stream at kb-level.
+    // A modest start probes upward cleanly without ever flooding the link.
+    const startKbps = maxKbps === null ? 6_000 : Math.min(maxKbps, 3_500);
+    // Absolute floor (not a fraction of max) for the same reason as minBitrate
+    // above: let the encoder ride all the way down to a bad link.
+    const minKbps = 400;
 
     const lines = sdp.split(/\r\n|\n/);
 
