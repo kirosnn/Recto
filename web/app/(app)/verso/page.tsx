@@ -372,7 +372,9 @@ export default function VersoPage() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0, 0, 0, 0.85)",
+            background: "rgba(0, 0, 0, 0.7)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -383,10 +385,9 @@ export default function VersoPage() {
           <div
             style={{
               position: "relative",
-              maxWidth: 480,
+              maxWidth: 520,
               width: "100%",
-              background: "var(--surface)",
-              border: "1px solid var(--border-2)",
+              background: "var(--bg)",
               borderRadius: 20,
               padding: "40px 32px 32px",
               boxShadow: "0 25px 50px -12px rgb(0 0 0 / 0.4)",
@@ -417,8 +418,6 @@ export default function VersoPage() {
             >
               ×
             </button>
-
-            <div style={{ fontSize: "3rem", marginBottom: 8 }}>🖥️</div>
 
             <h2 style={{ margin: "0 0 20px", fontSize: "1.55rem", fontWeight: 600, color: "var(--tx)" }}>
               Application Recto recommandée
