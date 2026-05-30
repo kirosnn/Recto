@@ -102,13 +102,13 @@ export default function VersoPage() {
     });
 
     try {
-      await conn.current.connect(trimmed);
+      await conn.current.connect(trimmed, settings.requestedCodec);
     } catch (e: unknown) {
       setError((e as Error).message || "Connexion échouée");
       setStatus("error");
       conn.current = null;
     }
-  }, [code]);
+  }, [code, settings.requestedCodec]);
 
   const handleDisconnect = () => {
     conn.current?.stop();
@@ -138,6 +138,25 @@ export default function VersoPage() {
   useEffect(() => {
     setShowStats(settings.showStats);
   }, [settings.showStats]);
+
+  // Send requested stream settings to Recto as soon as input channel is ready
+  useEffect(() => {
+    if (!inputChannel) return;
+    const sendClientSettings = () => {
+      if (inputChannel.readyState === "open") {
+        inputChannel.send(JSON.stringify({
+          type: "clientSettings",
+          maxBitrateKbps: settings.requestedBitrateKbps,
+          targetFps: settings.requestedFps,
+          codec: settings.requestedCodec,
+        }));
+      }
+    };
+    sendClientSettings();
+    const t1 = setTimeout(sendClientSettings, 500);
+    const t2 = setTimeout(sendClientSettings, 1500);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [inputChannel, settings.requestedBitrateKbps, settings.requestedFps, settings.requestedCodec]);
 
   if (status === "connected" || stream) {
     return (
