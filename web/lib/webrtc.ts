@@ -120,7 +120,7 @@ export class WebVersoConnection {
         case "H265": sorted = [...h265, ...h264hw, ...av1, ...vp9, ...rest]; break;
         case "AV1":  sorted = [...av1, ...h265, ...h264hw, ...vp9, ...rest]; break;
         case "VP9":  sorted = [...vp9, ...h265, ...h264hw, ...av1, ...rest]; break;
-        default:     sorted = [...h265, ...av1, ...h264hw, ...vp9, ...rest]; // auto: best efficiency first
+        default:     sorted = [...h264hw, ...av1, ...h265, ...vp9, ...rest];
       }
       try { transceiver.setCodecPreferences(sorted.filter(Boolean)); } catch {}
     }
