@@ -97,13 +97,22 @@ async function tuneVideoSender(pc: RTCPeerConnection, settings: StreamSettings) 
     enc.scaleResolutionDownBy = 1;
     if (settings.maxBitrateKbps !== null) {
       enc.maxBitrate = settings.maxBitrateKbps * 1000;
-      (enc as Record<string, unknown>).minBitrate = Math.floor(settings.maxBitrateKbps * 1000 * 0.35);
+      // Keep a modest floor so the encoder doesn't starve quality on detailed
+      // scenes, but low enough that it can adapt *down* under congestion. A high
+      // floor (e.g. 0.35×max ≈ 17.5 Mbps) forces the encoder to push more than a
+      // throttled link can carry → send-queue buildup → stalls/freezes. The
+      // x-google-start-bitrate SDP hint already ramps quality fast at connect,
+      // so a low floor here costs no startup sharpness.
+      (enc as Record<string, unknown>).minBitrate = Math.floor(settings.maxBitrateKbps * 1000 * 0.1);
     } else {
       delete enc.maxBitrate;
       delete (enc as Record<string, unknown>).minBitrate;
     }
+    // Quality preset keeps every pixel sharp (drops FPS under congestion);
+    // balanced/performance keep the framerate fluid and stable (drop resolution
+    // instead), which matches the goal of smooth, stable FPS for remote control.
     (params as RTCRtpSendParameters & { degradationPreference?: string }).degradationPreference =
-      settings.preset === "quality" ? "maintain-resolution" : "balanced";
+      settings.preset === "quality" ? "maintain-resolution" : "maintain-framerate";
     (enc as Record<string, unknown>).priority = "high";
     (enc as Record<string, unknown>).networkPriority = "high";
     (enc as Record<string, unknown>).scalabilityMode = "L1T1";
@@ -111,11 +120,74 @@ async function tuneVideoSender(pc: RTCPeerConnection, settings: StreamSettings) 
   } catch {}
 }
 
+// WebRTC starts encoding around ~300 kbps and ramps up slowly via its bandwidth
+// estimator, so the first seconds of a stream look blurry even on a fast link.
+// We munge the offer SDP to (a) cap the session bandwidth (b=AS/TIAS) and
+// (b) tell Chromium's encoder to *start* near the target bitrate
+// (x-google-start-bitrate), so quality reaches the target almost immediately.
+export function applyBitrateToSdp(sdp: string, settings: StreamSettings): string {
+  try {
+    const maxKbps = settings.maxBitrateKbps;
+    // Start high so quality ramps instantly, but capped so we don't overshoot a
+    // weak link on the very first frames (the estimator corrects down quickly).
+    const startKbps = maxKbps === null
+      ? 16_000
+      : Math.min(maxKbps, Math.max(4_000, Math.round(maxKbps * 0.6)));
+    const minKbps = maxKbps === null ? 4_000 : Math.round(maxKbps * 0.35);
+
+    const lines = sdp.split(/\r\n|\n/);
+
+    // First pass: collect payload types that are real video codecs (skip the
+    // retransmission / FEC payloads — rtx, red, ulpfec, flexfec).
+    const videoPayloads = new Set<string>();
+    let scanningVideo = false;
+    for (const line of lines) {
+      if (line.startsWith("m=")) scanningVideo = line.startsWith("m=video");
+      if (!scanningVideo) continue;
+      const m = line.match(/^a=rtpmap:(\d+)\s+([^/]+)\//i);
+      if (m && !/^(rtx|red|ulpfec|flexfec)$/i.test(m[2])) videoPayloads.add(m[1]);
+    }
+
+    const out: string[] = [];
+    let inVideo = false;
+    let insertedBandwidth = false;
+    for (const line of lines) {
+      if (line.startsWith("m=")) {
+        inVideo = line.startsWith("m=video");
+        insertedBandwidth = false;
+        out.push(line);
+        continue;
+      }
+      out.push(line);
+      // Bandwidth cap goes right after the connection (c=) line of the m=video block.
+      if (inVideo && !insertedBandwidth && line.startsWith("c=") && maxKbps !== null) {
+        out.push(`b=AS:${maxKbps}`);
+        out.push(`b=TIAS:${maxKbps * 1000}`);
+        insertedBandwidth = true;
+      }
+      // Start/min/max hints attach to the codec's own fmtp line.
+      if (inVideo && line.startsWith("a=fmtp:")) {
+        const pt = line.slice("a=fmtp:".length).split(" ")[0];
+        if (videoPayloads.has(pt)) {
+          let hints = `x-google-start-bitrate=${startKbps};x-google-min-bitrate=${minKbps}`;
+          if (maxKbps !== null) hints += `;x-google-max-bitrate=${maxKbps}`;
+          out[out.length - 1] = `${line};${hints}`;
+        }
+      }
+    }
+    return out.join("\r\n");
+  } catch {
+    return sdp;
+  }
+}
+
 function applyContentHint(stream: MediaStream, settings: StreamSettings) {
+  // "detail" keeps text/UI razor-sharp (favors spatial quality); "motion" keeps
+  // movement smooth (favors temporal continuity). The quality preset is the only
+  // one that trades fluidity for sharpness — everything else prioritizes smooth,
+  // stable FPS, which is what feels best for remote control.
   const contentHint =
-    settings.targetFps >= 60 && (settings.maxBitrateKbps === null || settings.maxBitrateKbps >= 50_000)
-      ? "motion"
-      : "detail";
+    settings.preset === "quality" ? "detail" : settings.targetFps >= 60 ? "motion" : "detail";
 
   for (const track of stream.getVideoTracks()) {
     try {
@@ -203,6 +275,7 @@ export class RectoConnection {
     await tuneVideoSender(this.pc, this.settings);
 
     const offer = await this.pc.createOffer();
+    if (offer.sdp) offer.sdp = applyBitrateToSdp(offer.sdp, this.settings);
     await this.pc.setLocalDescription(offer);
     await waitForIceGathering(this.pc);
     const completeOffer = this.pc.localDescription!;
@@ -305,18 +378,49 @@ export class VersoConnection {
     };
   }
 
-  async connect(code: string, requestedCodec: StreamSettings["codec"] = "auto") {
+  async connect(
+    code: string,
+    requestedCodec: StreamSettings["codec"] = "auto",
+    lowLatency = true
+  ) {
     const session = await fetchSession(code);
     if (!session.offer) throw new Error("Pas d'offre disponible");
 
     await this.pc.setRemoteDescription(session.offer);
     this.setReceiverCodecPreference(requestedCodec);
+    // Receivers exist once the remote (offer) description is applied — tune them
+    // for low latency before answering so the first decoded frames are immediate.
+    this.applyReceiverLatencyHints(lowLatency);
     const answer = await this.pc.createAnswer();
     await this.pc.setLocalDescription(answer);
     await waitForIceGathering(this.pc);
     const completeAnswer = this.pc.localDescription!;
 
     await submitAnswer(code, completeAnswer);
+  }
+
+  // Trim the receive-side buffering so input feels responsive. playoutDelayHint
+  // and jitterBufferTarget live on RTCRtpReceiver (not the <video> element — a
+  // common mistake that silently no-ops). Setting them to 0 tells the engine to
+  // render frames as soon as they arrive instead of holding a smoothing buffer.
+  setLowLatency(enabled: boolean) {
+    this.applyReceiverLatencyHints(enabled);
+  }
+
+  private applyReceiverLatencyHints(enabled: boolean) {
+    for (const r of this.pc.getReceivers()) {
+      if (r.track?.kind !== "video") continue;
+      try {
+        (r as RTCRtpReceiver & { playoutDelayHint?: number }).playoutDelayHint =
+          enabled ? 0 : undefined;
+      } catch {}
+      try {
+        if ("jitterBufferTarget" in r) {
+          (r as RTCRtpReceiver & { jitterBufferTarget?: number | null }).jitterBufferTarget =
+            enabled ? 0 : null;
+        }
+      } catch {}
+    }
   }
 
   private setReceiverCodecPreference(codec: StreamSettings["codec"]) {
