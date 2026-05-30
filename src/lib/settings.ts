@@ -4,7 +4,7 @@ export type Resolution = "native" | "1080p" | "1440p" | "4K";
 export type DisplayMode = "contain" | "cover";
 
 // Bitrate steps in Mbps — each maps to kbps = value * 1000, last = null (unlimited)
-export const BITRATE_STEPS_MBPS = [3, 5, 8, 12, 20, 30, 50, 80] as const;
+export const BITRATE_STEPS_MBPS = [8, 12, 20, 35, 50, 80, 120, 160] as const;
 
 export function bitrateStepToKbps(idx: number): number | null {
   return idx >= BITRATE_STEPS_MBPS.length ? null : BITRATE_STEPS_MBPS[idx] * 1000;
@@ -24,6 +24,7 @@ export function bitrateLabel(kbps: number | null): string {
 }
 
 export interface StreamSettings {
+  qualityTuningVersion: number;
   preset: QualityPreset;
   maxBitrateKbps: number | null; // null = unlimited
   targetFps: number;
@@ -43,17 +44,15 @@ export interface StreamSettings {
 type PresetValues = Pick<StreamSettings, "maxBitrateKbps" | "targetFps" | "codec">;
 
 export const PRESETS: Record<Exclude<QualityPreset, "custom">, PresetValues> = {
-  // 50 Mbps — LAN / fibre très haut débit, 1440p–4K@60fps
-  quality:     { maxBitrateKbps: 50_000, targetFps: 60, codec: "H264" },
-  // 20 Mbps — fibre standard, 1080p@60fps ou 1440p@60fps
-  balanced:    { maxBitrateKbps: 20_000, targetFps: 60, codec: "H264" },
-  // 8 Mbps — ADSL / 4G / connexion limitée, 1080p@30fps
-  performance: { maxBitrateKbps: 8_000,  targetFps: 30, codec: "H264" },
+  quality:     { maxBitrateKbps: 120_000, targetFps: 60, codec: "H264" },
+  balanced:    { maxBitrateKbps: 50_000,  targetFps: 60, codec: "H264" },
+  performance: { maxBitrateKbps: 20_000,  targetFps: 30, codec: "H264" },
 };
 
 export const DEFAULTS: StreamSettings = {
+  qualityTuningVersion: 2,
   preset: "balanced",
-  maxBitrateKbps: 20_000,
+  maxBitrateKbps: 50_000,
   targetFps: 60,
   codec: "H264",
   audioEnabled: true,
@@ -63,7 +62,7 @@ export const DEFAULTS: StreamSettings = {
   displayMode: "contain",
   showStats: false,
   lowLatencyMode: true,
-  requestedBitrateKbps: null,
+  requestedBitrateKbps: 50_000,
   requestedFps: 60,
   requestedCodec: "auto",
 };
@@ -73,7 +72,20 @@ const STORAGE_KEY = "windirector_settings";
 export function loadSettings(): StreamSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) };
+    if (raw) {
+      const stored = JSON.parse(raw) as Partial<StreamSettings>;
+      const migrated: Partial<StreamSettings> = { ...stored };
+
+      if ((stored.qualityTuningVersion ?? 0) < 2) {
+        if (stored.preset === "quality" && stored.maxBitrateKbps === 50_000) migrated.maxBitrateKbps = 120_000;
+        if (stored.preset === "balanced" && stored.maxBitrateKbps === 20_000) migrated.maxBitrateKbps = 50_000;
+        if (stored.preset === "performance" && stored.maxBitrateKbps === 8_000) migrated.maxBitrateKbps = 20_000;
+        if (stored.requestedBitrateKbps === null || stored.requestedBitrateKbps === undefined) migrated.requestedBitrateKbps = 50_000;
+        migrated.qualityTuningVersion = 2;
+      }
+
+      return { ...DEFAULTS, ...migrated };
+    }
   } catch {}
   return { ...DEFAULTS };
 }
