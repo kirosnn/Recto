@@ -34,8 +34,8 @@ export default function PreferencesDrawer({ user }: { user?: User }) {
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? "Fermer" : "Ouvrir les préférences"}
       >
-        <svg className="main-preferences-toggle-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <path d="M9 5L16 12L9 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <svg className="main-preferences-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <path d="M9 5L16 12L9 19" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
 
@@ -78,6 +78,7 @@ export default function PreferencesDrawer({ user }: { user?: User }) {
               cursor: "pointer",
               fontSize: "0.88rem",
               fontWeight: 500,
+              letterSpacing: "-0.01em",
               transition: "background 160ms ease",
             }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "var(--border)")}
