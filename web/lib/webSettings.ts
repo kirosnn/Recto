@@ -9,12 +9,30 @@ export interface WebClientSettings {
   displayMode: "contain" | "cover";
   /** Show live WebRTC stats overlay during session. */
   showStats: boolean;
+  /** Ultra-low latency mode: minimal jitter buffer + playout delay. */
+  lowLatencyMode: boolean;
+  /** Prefer hardware video decoding when available. */
+  hardwareDecode: boolean;
+  /** Touch drag sensitivity multiplier (1.0 = normal). */
+  touchSensitivity: number;
+  /** Client-requested max bitrate (kbps). Sent to Recto when connected. */
+  requestedBitrateKbps: number | null;
+  /** Client-requested target FPS. */
+  requestedFps: 30 | 60;
+  /** Client-requested codec preference. */
+  requestedCodec: "H264" | "H265" | "AV1" | "VP9" | "auto";
 }
 
 export const WEB_DEFAULTS: WebClientSettings = {
   inputThrottleMs: 0,
   displayMode: "contain",
   showStats: false,
+  lowLatencyMode: true,
+  hardwareDecode: true,
+  touchSensitivity: 1.0,
+  requestedBitrateKbps: null,
+  requestedFps: 60,
+  requestedCodec: "auto",
 };
 
 const KEY = "windirector_web_settings";
