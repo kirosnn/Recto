@@ -128,6 +128,11 @@ export default function VersoPage() {
       if (e.ctrlKey && e.altKey && e.code === "KeyS") {
         e.preventDefault();
         setShowStats((v) => !v);
+        return;
+      }
+      if (e.ctrlKey && e.altKey && e.code === "KeyH") {
+        e.preventDefault();
+        setHideUI((v) => !v);
       }
     };
     window.addEventListener("keydown", onKey);
