@@ -26,6 +26,7 @@ type Ctx = {
   start: () => Promise<void>;
   stop: () => void;
   copyCode: () => Promise<void>;
+  getStats: () => Promise<RTCStatsReport>;
 };
 
 // One-line human summary of an input event for the debug overlay.
@@ -63,13 +64,14 @@ const RectoSessionCtx = createContext<Ctx>({
   status: "idle", code: "", duration: 0, error: "", copied: false, peer: null,
   lastInputRef: { current: { summary: "", count: 0 } },
   start: async () => {}, stop: () => {}, copyCode: async () => {},
+  getStats: () => Promise.resolve(new Map() as unknown as RTCStatsReport),
 });
 
 export function useRectoSession() { return useContext(RectoSessionCtx); }
 
 export function RectoSessionProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const { settings } = useSettings();
+  const { settings, update } = useSettings();
   const [status, setStatus] = useState<SessionStatus>("idle");
   const [code, setCode] = useState("");
   const [duration, setDuration] = useState(0);
@@ -128,6 +130,15 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
         },
         onDisconnected: () => stop(),
         onError: (e) => { setError(e); setStatus("error"); },
+        onClientSettings: (req) => {
+          // Apply client-requested quality settings (bitrate, fps, codec)
+          update({
+            maxBitrateKbps: req.maxBitrateKbps ?? settings.maxBitrateKbps,
+            targetFps: req.targetFps,
+            codec: req.codec,
+            preset: "custom",
+          });
+        },
       }, settings);
 
       const inputCh = conn.current.getInputChannel();
@@ -210,8 +221,10 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
     setTimeout(() => setCopied(false), 2000);
   }, [code]);
 
+  const getStats = useCallback(() => conn.current?.getStats() ?? Promise.resolve(new Map() as unknown as RTCStatsReport), []);
+
   return (
-    <RectoSessionCtx.Provider value={{ status, code, duration, error, copied, peer, lastInputRef, start, stop, copyCode }}>
+    <RectoSessionCtx.Provider value={{ status, code, duration, error, copied, peer, lastInputRef, start, stop, copyCode, getStats }}>
       {children}
     </RectoSessionCtx.Provider>
   );
