@@ -275,6 +275,7 @@ export default function VideoDisplay({
       if (e.code === "Escape") return;
       if (e.ctrlKey && e.altKey && e.code === "KeyH") {
         e.preventDefault();
+        e.stopPropagation();
         if (down) onToggleUI();
         return;
       }
