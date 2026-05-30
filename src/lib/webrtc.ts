@@ -128,16 +128,18 @@ async function tuneVideoSender(pc: RTCPeerConnection, settings: StreamSettings) 
 export function applyBitrateToSdp(sdp: string, settings: StreamSettings): string {
   try {
     const maxKbps = settings.maxBitrateKbps;
-    // Start LOW and let the bandwidth estimator ramp UP. A high start (e.g. 60%
-    // of a 50 Mbps cap = 30 Mbps) floods a constrained peer's link on the very
-    // first frames → packet loss → the estimator collapses to a few hundred kbps
-    // and recovers only slowly (additive increase). On a weak/lossy return path
-    // (a peer with poor upload, whose RTCP feedback drives our estimate) this
-    // overshoot-collapse spiral is exactly what pins the stream at kb-level.
-    // A modest start probes upward cleanly without ever flooding the link.
-    const startKbps = maxKbps === null ? 6_000 : Math.min(maxKbps, 3_500);
-    // Absolute floor (not a fraction of max) for the same reason as minBitrate
-    // above: let the encoder ride all the way down to a bad link.
+    // Start bitrate: scale with the cap so a fast LAN starts sharp, but ceiling
+    // it so we never flood a constrained peer on the first frames. A start that's
+    // too high (e.g. 60% of a 50 Mbps cap = 30 Mbps) overshoots a weak return
+    // link → packet loss → the estimator collapses to a few hundred kbps and
+    // recovers only slowly (additive increase) — the spiral that pins the stream
+    // at kb-level. 8 Mbps is high enough to look good immediately on any decent
+    // link, low enough that the estimator corrects down within a frame or two.
+    const startKbps = maxKbps === null
+      ? 8_000
+      : Math.min(maxKbps, Math.max(2_000, Math.round(maxKbps * 0.5)), 8_000);
+    // Absolute floor (not a fraction of max) so the encoder can ride all the way
+    // down to a bad link instead of being pinned above its real capacity.
     const minKbps = 400;
 
     const lines = sdp.split(/\r\n|\n/);
