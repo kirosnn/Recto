@@ -252,7 +252,43 @@ export default function SettingsPage() {
             </div>
           </Row>
 
-          {/* Gamepad sensitivity */}
+          <Row label="Ajustement vidéo">
+            <div className="pref-options pref-options-inline">
+              {(["contain", "cover"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={`pref-option pref-option-sm${settings.displayMode === mode ? " is-active" : ""}`}
+                  onClick={() => update({ displayMode: mode })}
+                >
+                  {mode === "contain" ? "Letterbox" : "Plein"}
+                </button>
+              ))}
+            </div>
+          </Row>
+
+          <Row label="Stats overlay">
+            <button
+              type="button"
+              className={`pref-toggle-pill${settings.showStats ? " is-on" : ""}`}
+              onClick={() => update({ showStats: !settings.showStats })}
+              aria-pressed={settings.showStats}
+            >
+              <span className="pref-toggle-pill-knob" />
+            </button>
+          </Row>
+
+          <Row label="Mode ultra basse latence">
+            <button
+              type="button"
+              className={`pref-toggle-pill${settings.lowLatencyMode ? " is-on" : ""}`}
+              onClick={() => update({ lowLatencyMode: !settings.lowLatencyMode })}
+              aria-pressed={settings.lowLatencyMode}
+            >
+              <span className="pref-toggle-pill-knob" />
+            </button>
+          </Row>
+
           <Block label={`Sensibilité manette virtuelle  ·  ${Math.round(settings.virtualGamepadSensitivity * 1000) / 10}`}>
             <input
               type="range"
@@ -267,7 +303,59 @@ export default function SettingsPage() {
             </div>
           </Block>
 
-          {/* Shortcuts */}
+          <Block label="Qualité demandée au Recto">
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+                <span style={{ fontSize: "0.82rem", color: "var(--tx-2)" }}>Codec préféré</span>
+                <div className="pref-options pref-options-inline">
+                  {(["auto", "H264", "H265", "AV1", "VP9"] as const).map((codec) => (
+                    <button
+                      key={codec}
+                      type="button"
+                      className={`pref-option pref-option-sm${settings.requestedCodec === codec ? " is-active" : ""}`}
+                      onClick={() => update({ requestedCodec: codec })}
+                    >
+                      {codec === "auto" ? "Auto" : codec}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+                <span style={{ fontSize: "0.82rem", color: "var(--tx-2)" }}>FPS demandé</span>
+                <div className="pref-options pref-options-inline">
+                  {([30, 60] as const).map((fps) => (
+                    <button
+                      key={fps}
+                      type="button"
+                      className={`pref-option pref-option-sm${settings.requestedFps === fps ? " is-active" : ""}`}
+                      onClick={() => update({ requestedFps: fps })}
+                    >
+                      {fps}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 8, fontSize: "0.82rem", color: "var(--tx-2)" }}>
+                  <span>Bitrate max demandé</span>
+                  <span>{bitrateLabel(settings.requestedBitrateKbps)}</span>
+                </div>
+                <input
+                  type="range"
+                  className="pref-slider"
+                  min={0}
+                  max={80}
+                  step={1}
+                  value={settings.requestedBitrateKbps ? Math.min(80, settings.requestedBitrateKbps / 1000) : 0}
+                  onChange={(e) => {
+                    const value = Number(e.target.value);
+                    update({ requestedBitrateKbps: value === 0 ? null : value * 1000 });
+                  }}
+                />
+              </div>
+            </div>
+          </Block>
+
           <Block label="Raccourcis en session" last>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {[
