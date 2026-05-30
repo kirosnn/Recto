@@ -1,0 +1,24 @@
+{
+  "productName": "Recto Dev Verso",
+  "build": {
+    "devUrl": "http://localhost:5174",
+    "beforeDevCommand": "npm run dev -- --port 5174"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "verso",
+        "url": "/verso",
+        "title": "Verso",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "decorations": true,
+        "transparent": false,
+        "resizable": true,
+        "center": true
+      }
+    ]
+  }
+}
