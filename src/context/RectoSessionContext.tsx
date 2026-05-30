@@ -100,8 +100,9 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
     setError("");
     try {
       const videoConstraints: MediaTrackConstraints & { cursor?: string } = {
-        frameRate: { ideal: settings.targetFps, max: settings.targetFps },
+        frameRate: { ideal: settings.targetFps, min: settings.targetFps >= 60 ? 45 : 24, max: settings.targetFps },
         cursor: "always",
+        resizeMode: "none",
       };
       if (settings.resolution !== "native") {
         const resMap: Record<string, number> = { "1080p": 1080, "1440p": 1440, "4K": 2160 };
@@ -113,12 +114,6 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
         video: videoConstraints as MediaTrackConstraints,
         audio: settings.audioEnabled,
       });
-
-      // Screen content hint: "detail" preserves sharpness over motion, which
-      // lets the browser encoder (NVENC/AMF/QSV) optimise for text and UI.
-      for (const t of stream.getVideoTracks()) {
-        try { (t as MediaStreamTrack & { contentHint: string }).contentHint = "detail"; } catch {}
-      }
 
       stream.getVideoTracks()[0].onended = () => stop();
 
