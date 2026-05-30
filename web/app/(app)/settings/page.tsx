@@ -50,7 +50,7 @@ export default function SettingsPage() {
   const bitrateIdx = kbpsToStepIdx(settings.maxBitrateKbps);
 
   return (
-    <div style={{ minHeight: "100vh", padding: "clamp(56px,6vw,72px) clamp(16px,4vw,32px) 48px" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "clamp(56px,6vw,72px) clamp(16px,4vw,32px) 48px" }}>
       <button onClick={() => router.back()} className="back-btn" aria-label="Retour">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden>
           <path d="M13 4L7 10L13 16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
