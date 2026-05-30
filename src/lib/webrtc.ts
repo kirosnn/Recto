@@ -203,6 +203,69 @@ function applyContentHint(stream: MediaStream, settings: StreamSettings) {
   }
 }
 
+// ─── TEMP DIAGNOSTIC (à retirer) ───────────────────────────────────────────
+// Dumps the latency-critical RTCStats fields as one compact console line.
+// `role` distinguishes the two ends; paste both outputs to diagnose where the
+// latency / quality budget is going (encode vs decode vs jitter buffer vs link).
+function n(v: unknown): number {
+  return typeof v === "number" ? v : 0;
+}
+
+export function logWebRTCDiagnostics(report: RTCStatsReport, role: "RECTO" | "VERSO"): void {
+  const stats = report as unknown as Map<string, Record<string, unknown>>;
+  let out: Record<string, unknown> | null = null; // outbound video (sender)
+  let inb: Record<string, unknown> | null = null; // inbound video (receiver)
+  let pair: Record<string, unknown> | null = null;
+  let codecMime = "?";
+
+  stats.forEach((s) => {
+    if (s.type === "outbound-rtp" && s.kind === "video") out = s;
+    else if (s.type === "inbound-rtp" && s.kind === "video") inb = s;
+    else if (s.type === "candidate-pair" && (s.nominated || s.selected)) pair = s;
+  });
+
+  const codecOwner = (out ?? inb) as Record<string, unknown> | null;
+  if (codecOwner?.codecId) {
+    const c = stats.get(codecOwner.codecId as string);
+    if (c?.mimeType) codecMime = (c.mimeType as string).replace("video/", "");
+  }
+
+  const rttMs = pair ? Math.round(n((pair as Record<string, unknown>).currentRoundTripTime) * 1000) : -1;
+  const parts: string[] = [`[DIAG ${role}]`, `codec=${codecMime}`, `rtt=${rttMs}ms`];
+
+  if (out) {
+    const o = out as Record<string, unknown>;
+    const enc = n(o.totalEncodeTime) / Math.max(1, n(o.framesEncoded));
+    parts.push(
+      `ENC=${o.encoderImplementation ?? "?"}`,
+      `res=${n(o.frameWidth)}x${n(o.frameHeight)}`,
+      `fps=${Math.round(n(o.framesPerSecond))}`,
+      `encTime=${(enc * 1000).toFixed(1)}ms/f`,
+      `qLimit=${o.qualityLimitationReason ?? "?"}`,
+      `targetKbps=${Math.round(n(o.targetBitrate) / 1000)}`
+    );
+    if (pair) parts.push(`availOutKbps=${Math.round(n((pair as Record<string, unknown>).availableOutgoingBitrate) / 1000)}`);
+  }
+
+  if (inb) {
+    const i = inb as Record<string, unknown>;
+    const jbDelay = n(i.jitterBufferDelay) / Math.max(1, n(i.jitterBufferEmittedCount));
+    const dec = n(i.totalDecodeTime) / Math.max(1, n(i.framesDecoded));
+    parts.push(
+      `DEC=${i.decoderImplementation ?? "?"}`,
+      `res=${n(i.frameWidth)}x${n(i.frameHeight)}`,
+      `fps=${Math.round(n(i.framesPerSecond))}`,
+      `decTime=${(dec * 1000).toFixed(1)}ms/f`,
+      `jitterBuf=${(jbDelay * 1000).toFixed(0)}ms`,
+      `freezes=${n(i.freezeCount)}`,
+      `frozen=${n(i.totalFreezesDuration).toFixed(1)}s`
+    );
+  }
+
+  console.log(parts.join(" "));
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 export type RectoCallbacks = {
   onCode: (code: string) => void;
   onConnected: () => void;
@@ -308,6 +371,10 @@ export class RectoConnection {
 
   getInputChannel(): RTCDataChannel | null {
     return this.inputChannel;
+  }
+
+  getStats(): Promise<RTCStatsReport> {
+    return this.pc.getStats();
   }
 
   sendMeta(data: object) {
