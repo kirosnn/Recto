@@ -1,9 +1,9 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { User } from "@supabase/supabase-js";
-import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 
 type AuthCtx = { user: User | null; loading: boolean; signOut: () => Promise<void> };
 
