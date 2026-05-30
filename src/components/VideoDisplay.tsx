@@ -84,6 +84,7 @@ interface VideoDisplayProps {
   onToggleUI: () => void;
   getStats?: () => Promise<RTCStatsReport>;
   hwCaps?: HwEncoderCaps | null;
+  setLowLatency?: (enabled: boolean) => void;
 }
 
 export default function VideoDisplay({
@@ -95,6 +96,7 @@ export default function VideoDisplay({
   onToggleUI,
   getStats,
   hwCaps,
+  setLowLatency,
 }: VideoDisplayProps) {
   const { settings } = useSettings();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -113,9 +115,15 @@ export default function VideoDisplay({
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
-      (videoRef.current as HTMLVideoElement & { playoutDelayHint?: number }).playoutDelayHint = settings.lowLatencyMode ? 0 : undefined;
     }
-  }, [stream, settings.lowLatencyMode]);
+  }, [stream]);
+
+  // Low-latency tuning belongs on the RTCRtpReceiver (playoutDelayHint /
+  // jitterBufferTarget), not the <video> element. Route it through the
+  // connection, which owns the receivers. Re-applied when the toggle changes.
+  useEffect(() => {
+    setLowLatency?.(settings.lowLatencyMode);
+  }, [stream, settings.lowLatencyMode, setLowLatency]);
 
   useEffect(() => {
     containerRef.current?.focus();
