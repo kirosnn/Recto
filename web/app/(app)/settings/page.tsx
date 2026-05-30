@@ -3,6 +3,7 @@
 import { useTheme } from "../../../components/ThemeProvider";
 import { useWebSettings } from "../../../lib/webSettings";
 import { useRouter } from "next/navigation";
+import { createClient } from "../../../lib/supabase-browser";
 import {
   BITRATE_STEPS_MBPS,
   bitrateStepToKbps,
@@ -37,7 +38,15 @@ export default function SettingsPage() {
   const router = useRouter();
   const { theme, toggle } = useTheme();
   const { settings, update, applyPreset } = useWebSettings();
+  const supabase = createClient();
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  };
+
+  // Note: user not fetched here for simplicity; add if needed. For now, no Compte section to match minimal web.
   const bitrateIdx = kbpsToStepIdx(settings.maxBitrateKbps);
 
   return (
