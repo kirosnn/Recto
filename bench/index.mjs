@@ -119,6 +119,13 @@ async function main() {
 
   await page.goto(url.href);
 
+  // Click the "Lancer" button if present (required for captureStream)
+  try {
+    await page.click('#start-btn', { timeout: 3000 });
+  } catch {
+    // Button may not exist in older bench.html, ignore
+  }
+
   const timeoutMs = (duration + 30) * 1000;
   let results;
   try {
