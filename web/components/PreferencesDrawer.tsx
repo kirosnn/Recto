@@ -18,6 +18,7 @@ export default function PreferencesDrawer({ user }: { user?: User }) {
   const { theme, toggle } = useTheme();
   const { settings, update } = useWebSettings();
   const supabase = createClient();
+  const isVerso = true; // site is primarily Verso client
 
   const name = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "";
   const avatar = user?.user_metadata?.avatar_url;
