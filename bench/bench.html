@@ -19,21 +19,34 @@
 <video id="v" autoplay muted playsinline></video>
 <h1>WinDirector — Benchmark WebRTC</h1>
 <div id="sub">Loopback local · mesure codec, bitrate, FPS, latence encodeur</div>
-<div id="log">Initialisation…</div>
+<button id="start-btn" style="margin: 12px 0; padding: 10px 24px; font-size: 1rem; background:#d97757; color:white; border:none; border-radius:8px; cursor:pointer;">
+  Lancer le benchmark
+</button>
+<div id="log">En attente de clic…</div>
 <div id="bar-wrap"><div id="bar"></div></div>
 <pre id="out"></pre>
 
 <script>
 // ── Config ────────────────────────────────────────────────────────────────────
 const P           = new URLSearchParams(location.search);
-const DURATION    = parseInt(P.get('duration')   ?? '30');
-const TARGET_KBPS = parseInt(P.get('bitrate')    ?? '20000');
-const TARGET_FPS  = parseInt(P.get('fps')        ?? '60');
-const CODEC       = P.get('codec')               ?? 'H264';
-const RES_P       = parseInt(P.get('resolution') ?? '720'); // 720 | 1080 | 1440
+let DURATION    = parseInt(P.get('duration')   ?? '30');
+let TARGET_KBPS = parseInt(P.get('bitrate')    ?? '20000');
+let TARGET_FPS  = parseInt(P.get('fps')        ?? '60');
+let CODEC       = P.get('codec')               ?? 'H264';
+let RES_P       = parseInt(P.get('resolution') ?? '720'); // 720 | 1080 | 1440
+const RUN_SUITE   = P.has('suite');
+
+// Realistic performance targets (from user table)
+const REALISTIC_PROFILES = [
+  { name: '1080p60 propre',        res: 1080, kbps: 20000, fps: 60, codec: 'H264' },
+  { name: '1440p60 correct',       res: 1440, kbps: 35000, fps: 60, codec: 'H264' },
+  { name: '1440p60 très propre',   res: 1440, kbps: 52000, fps: 60, codec: 'H265' },
+  { name: '1440p120',              res: 1440, kbps: 75000, fps: 120, codec: 'H265' },
+  { name: '4K60',                  res: 2160, kbps: 95000, fps: 60, codec: 'AV1' },
+];
 
 // Canvas dimensions from resolution param
-const RES_MAP = { 720: [1280, 720], 1080: [1920, 1080], 1440: [2560, 1440] };
+const RES_MAP = { 720: [1280, 720], 1080: [1920, 1080], 1440: [2560, 1440], 2160: [3840, 2160] };
 const [W, H] = RES_MAP[RES_P] ?? RES_MAP[720];
 
 const canvas = document.getElementById('c');
@@ -42,7 +55,7 @@ canvas.height = H;
 
 // ── Noise region (pre-allocated, partially updated each frame) ────────────────
 // This creates incompressible content that forces the encoder to use real bits.
-const NOISE_H = Math.round(H * 0.45);   // 45% of frame height = noise zone
+const NOISE_H = Math.round(H * 0.60);   // 60% noise = more realistic incompressible desktop content
 const noiseBuf = new Uint8ClampedArray(W * NOISE_H * 4);
 // Pre-fill with random noise
 for (let i = 0; i < noiseBuf.length; i++) noiseBuf[i] = Math.random() * 256 | 0;
@@ -189,7 +202,8 @@ async function tuneSender(pc) {
   enc.maxFramerate           = TARGET_FPS;
   enc.priority               = 'high';
   enc.networkPriority        = 'high';
-  enc.degradationPreference  = 'maintain-framerate'; // key: drop resolution not FPS
+  enc.degradationPreference  = 'maintain-resolution'; // more realistic for desktop/UI
+  enc.scalabilityMode        = 'L1T1';                // single spatial layer, single temporal
   try { await sender.setParameters(params); } catch {}
 }
 
@@ -203,6 +217,11 @@ async function run() {
   startDraw();
 
   const stream = canvas.captureStream(TARGET_FPS);
+  // Match real app behavior: tell the encoder this is sharp UI/desktop content
+  for (const t of stream.getVideoTracks()) {
+    try { (t as MediaStreamTrack & { contentHint: string }).contentHint = 'detail'; } catch {}
+  }
+
   const pc1 = new RTCPeerConnection({ iceServers: [] }); // sender (encoder)
   const pc2 = new RTCPeerConnection({ iceServers: [] }); // receiver (decoder)
 
@@ -240,6 +259,8 @@ async function run() {
   // Give the encoder a moment to stabilise before tuning
   await new Promise(r => setTimeout(r, 300));
   await tuneSender(pc1);
+  // Re-apply after a short delay (helps some browser implementations on loopback)
+  setTimeout(() => tuneSender(pc1), 900);
 
   document.getElementById('log').textContent = `Connexion OK — collecte des stats (${W}×${H})…`;
 
@@ -312,16 +333,25 @@ async function run() {
         pc1.close(); pc2.close();
 
         const results = {
-          config: { codec: CODEC, targetBitrateKbps: TARGET_KBPS, targetFps: TARGET_FPS,
-                    durationSec: DURATION, resolution: `${W}×${H}` },
-          codec, resolution, encoderImpl,
-          bitrate: { avgKbps: avg(bitrates), minKbps: mn(bitrates), maxKbps: mx(bitrates) },
-          fps:     { avgSend: avg(fpsSend), minSend: mn(fpsSend), avgRecv: avg(fpsRecv) },
-          rtt:     { avgMs: avg(rtts) },
-          jitter:  { avgMs: avg(jitters) },
-          decodeTime: { avgMs: avg(decodeTimes) },
-          packetLossRate: pktTotal > 0 ? pktLost / pktTotal : 0,
-          qualityLimitation: qualityLimit,
+          requested: {
+            codec: CODEC,
+            bitrateKbps: TARGET_KBPS,
+            fps: TARGET_FPS,
+            resolution: `${W}×${H}`,
+            durationSec: DURATION,
+          },
+          achieved: {
+            codec,
+            resolution,
+            encoderImpl,
+            bitrateKbps: { avg: avg(bitrates), min: mn(bitrates), max: mx(bitrates) },
+            fps: { avgSend: avg(fpsSend), minSend: mn(fpsSend), avgRecv: avg(fpsRecv) },
+            rttMs: avg(rtts),
+            jitterMs: avg(jitters),
+            decodeTimeMs: avg(decodeTimes),
+            packetLoss: pktTotal > 0 ? pktLost / pktTotal : 0,
+            qualityLimitation: qualityLimit,
+          },
         };
 
         document.getElementById('out').style.display = 'block';
@@ -336,11 +366,38 @@ async function run() {
 }
 
 window.addEventListener('load', () => {
-  run().catch(e => {
-    document.getElementById('log').textContent = 'Erreur: ' + e.message;
-    console.error(e);
-    if (typeof window.__benchDone === 'function') window.__benchDone({ error: e.message });
-  });
+  const btn = document.getElementById('start-btn');
+  if (btn) {
+    btn.onclick = initBench;
+  } else {
+    initBench();
+  }
+});
+}
+
+function initBench() {
+  const btn = document.getElementById('start-btn');
+  if (btn) btn.style.display = 'none';
+
+  if (RUN_SUITE) {
+    runSuite();
+  } else {
+    document.getElementById('log').textContent = 'Initialisation…';
+    run().catch(e => {
+      document.getElementById('log').textContent = 'Erreur: ' + e.message;
+      console.error(e);
+      if (typeof window.__benchDone === 'function') window.__benchDone({ error: e.message });
+    });
+  }
+}
+
+window.addEventListener('load', () => {
+  const btn = document.getElementById('start-btn');
+  if (btn) {
+    btn.onclick = initBench;
+  } else {
+    initBench();
+  }
 });
 </script>
 </body>
