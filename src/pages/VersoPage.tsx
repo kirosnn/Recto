@@ -66,7 +66,7 @@ export default function VersoPage() {
     });
 
     try {
-      await conn.current.connect(trimmed, settings.requestedCodec);
+      await conn.current.connect(trimmed, settings.requestedCodec, settings.lowLatencyMode);
     } catch (e: unknown) {
       setError((e as Error).message || "Connexion échouée");
       setStatus("error");
@@ -154,6 +154,7 @@ export default function VersoPage() {
           onToggleUI={() => setHideUI((v) => !v)}
           getStats={() => conn.current?.getStats() ?? Promise.resolve(new Map() as unknown as RTCStatsReport)}
           hwCaps={hwCaps}
+          setLowLatency={(enabled) => conn.current?.setLowLatency(enabled)}
         />
         {peer && !hideUI && (
           <PeerBadge
