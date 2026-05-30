@@ -1,7 +1,7 @@
 "use client";
 
-import { useTheme } from "../components/ThemeProvider";
-import { useWebSettings } from "../lib/webSettings";
+import { useTheme } from "../../../components/ThemeProvider";
+import { useWebSettings } from "../../../lib/webSettings";
 import { useRouter } from "next/navigation";
 
 export default function SettingsPage() {
@@ -74,7 +74,7 @@ export default function SettingsPage() {
             </div>
           </Row>
 
-          <Row label="Stats overlay" last>
+          <Row label="Stats overlay">
             <button
               type="button"
               className={`pref-toggle-pill${settings.showStats ? " is-on" : ""}`}
@@ -83,6 +83,86 @@ export default function SettingsPage() {
             >
               <span className="pref-toggle-pill-knob" />
             </button>
+          </Row>
+
+          <Row label="Mode ultra basse latence">
+            <button
+              type="button"
+              className={`pref-toggle-pill${settings.lowLatencyMode ? " is-on" : ""}`}
+              onClick={() => update({ lowLatencyMode: !settings.lowLatencyMode })}
+              aria-pressed={settings.lowLatencyMode}
+            >
+              <span className="pref-toggle-pill-knob" />
+            </button>
+          </Row>
+
+          <Row label="Décodage matériel préféré">
+            <button
+              type="button"
+              className={`pref-toggle-pill${settings.hardwareDecode ? " is-on" : ""}`}
+              onClick={() => update({ hardwareDecode: !settings.hardwareDecode })}
+              aria-pressed={settings.hardwareDecode}
+            >
+              <span className="pref-toggle-pill-knob" />
+            </button>
+          </Row>
+
+          <Row label={`Sensibilité tactile · ${settings.touchSensitivity.toFixed(1)}×`} last>
+            <input
+              type="range"
+              className="pref-slider"
+              min={0.5} max={2} step={0.1}
+              value={settings.touchSensitivity}
+              onChange={(e) => update({ touchSensitivity: parseFloat(e.target.value) })}
+            />
+          </Row>
+        </Section>
+
+        <Section label="Qualité demandée au Recto" sub="Ces paramètres sont envoyés à l'hôte quand vous vous connectez">
+          <Row label="Codec préféré">
+            <div className="pref-options pref-options-inline">
+              {(["auto", "H264", "H265", "AV1", "VP9"] as const).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={`pref-option pref-option-sm${settings.requestedCodec === c ? " is-active" : ""}`}
+                  onClick={() => update({ requestedCodec: c })}
+                >
+                  {c === "auto" ? "Auto" : c}
+                </button>
+              ))}
+            </div>
+          </Row>
+
+          <Row label="FPS demandé">
+            <div className="pref-options pref-options-inline">
+              {[30, 60].map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  className={`pref-option pref-option-sm${settings.requestedFps === f ? " is-active" : ""}`}
+                  onClick={() => update({ requestedFps: f as 30 | 60 })}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+          </Row>
+
+          <Row label={`Bitrate max demandé  ·  ${settings.requestedBitrateKbps ? settings.requestedBitrateKbps + " kbps" : "Illimité"}`} last>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="range"
+                className="pref-slider"
+                min={0} max={80} step={1}
+                value={settings.requestedBitrateKbps ? Math.min(80, settings.requestedBitrateKbps / 1000) : 0}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  update({ requestedBitrateKbps: v === 0 ? null : v * 1000 });
+                }}
+              />
+              <button type="button" className="pref-option pref-option-sm" onClick={() => update({ requestedBitrateKbps: null })}>∞</button>
+            </div>
           </Row>
         </Section>
 
