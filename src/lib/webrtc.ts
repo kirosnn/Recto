@@ -71,8 +71,7 @@ function setCodecPreference(pc: RTCPeerConnection, codec: StreamSettings["codec"
         sorted = [...vp9, ...h264hw, ...h264sw, ...av1, ...h265, ...rest];
         break;
       case "auto":
-        // Prefer hardware-friendly order: H265 > AV1 > H264-HW > VP9
-        sorted = [...h265, ...av1, ...h264hw, ...h264sw, ...vp9, ...rest];
+        sorted = [...h264hw, ...h264sw, ...h265, ...av1, ...vp9, ...rest];
         break;
       default:
         sorted = all;
@@ -525,7 +524,7 @@ export class VersoConnection {
           sorted = [...vp9, ...h265, ...h264, ...av1, ...rest];
           break;
         default:
-          sorted = [...h265, ...av1, ...h264, ...vp9, ...rest];
+          sorted = [...h264, ...h265, ...av1, ...vp9, ...rest];
       }
 
       try { transceiver.setCodecPreferences(sorted.filter(Boolean)); } catch {}
