@@ -103,7 +103,11 @@ export default function VersoPage() {
     });
 
     try {
-      await conn.current.connect(trimmed, settings.requestedCodec, settings.lowLatencyMode);
+      await conn.current.connect(
+        trimmed,
+        settings.requestedCodec,
+        settings.lowLatencyMode,
+      );
     } catch (e: unknown) {
       setError((e as Error).message || "Connexion échouée");
       setStatus("error");
@@ -150,19 +154,29 @@ export default function VersoPage() {
     if (!inputChannel) return;
     const sendClientSettings = () => {
       if (inputChannel.readyState === "open") {
-        inputChannel.send(JSON.stringify({
-          type: "clientSettings",
-          maxBitrateKbps: settings.requestedBitrateKbps,
-          targetFps: settings.requestedFps,
-          codec: settings.requestedCodec,
-        }));
+        inputChannel.send(
+          JSON.stringify({
+            type: "clientSettings",
+            maxBitrateKbps: settings.requestedBitrateKbps,
+            targetFps: settings.requestedFps,
+            codec: settings.requestedCodec,
+          }),
+        );
       }
     };
     sendClientSettings();
     const t1 = setTimeout(sendClientSettings, 500);
     const t2 = setTimeout(sendClientSettings, 1500);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [inputChannel, settings.requestedBitrateKbps, settings.requestedFps, settings.requestedCodec]);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [
+    inputChannel,
+    settings.requestedBitrateKbps,
+    settings.requestedFps,
+    settings.requestedCodec,
+  ]);
 
   if (status === "connected" || stream) {
     return (
@@ -419,17 +433,42 @@ export default function VersoPage() {
               ×
             </button>
 
-            <h2 style={{ margin: "0 0 20px", fontSize: "1.55rem", fontWeight: 600, color: "var(--tx)" }}>
+            <h2
+              style={{
+                margin: "0 0 20px",
+                fontSize: "1.55rem",
+                fontWeight: 600,
+                color: "var(--tx)",
+              }}
+            >
               Application Recto recommandée
             </h2>
 
-            <div style={{ marginBottom: 28, fontSize: "1.02rem", lineHeight: 1.6, color: "var(--tx-2)" }}>
-              Pour une expérience de streaming complète, stable et avec une latence minimale,<br />
-              <strong>utilisez l’application Recto (Windows)</strong>.<br /><br />
-              Le client web est uniquement expérimental et ne supporte pas le streaming vidéo de qualité.
+            <div
+              style={{
+                marginBottom: 28,
+                fontSize: "1.02rem",
+                lineHeight: 1.6,
+                color: "var(--tx-2)",
+              }}
+            >
+              Pour une expérience de streaming complète, stable et avec une
+              latence minimale,
+              <br />
+              <strong>utilisez l’application Recto (Windows)</strong>.<br />
+              <br />
+              Le client web est uniquement expérimental et ne supporte pas le
+              streaming vidéo de qualité.
             </div>
 
-            <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                justifyContent: "center",
+                flexWrap: "wrap",
+              }}
+            >
               <button
                 onClick={() => setShowModal(false)}
                 style={{
@@ -443,8 +482,12 @@ export default function VersoPage() {
                   cursor: "pointer",
                   transition: "all 0.2s",
                 }}
-                onMouseOver={(e) => (e.currentTarget.style.background = "var(--border)")}
-                onMouseOut={(e) => (e.currentTarget.style.background = "var(--bg-alt)")}
+                onMouseOver={(e) =>
+                  (e.currentTarget.style.background = "var(--border)")
+                }
+                onMouseOut={(e) =>
+                  (e.currentTarget.style.background = "var(--bg-alt)")
+                }
               >
                 Continuer sur le web
               </button>
@@ -466,12 +509,19 @@ export default function VersoPage() {
                   boxShadow: "0 4px 12px rgba(217, 119, 87, 0.3)",
                 }}
               >
-                ⬇️ Télécharger Recto
+                Télécharger Recto
               </a>
             </div>
 
-            <p style={{ marginTop: 24, fontSize: "0.78rem", color: "var(--tx-3)" }}>
-              L’application desktop utilise l’accélération matérielle NVENC / AMF / QSV
+            <p
+              style={{
+                marginTop: 24,
+                fontSize: "0.78rem",
+                color: "var(--tx-3)",
+              }}
+            >
+              L’application desktop utilise l’accélération matérielle NVENC /
+              AMF / QSV
             </p>
           </div>
         </div>
