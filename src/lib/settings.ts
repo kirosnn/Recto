@@ -1,6 +1,7 @@
 export type Codec = "H264" | "H265" | "AV1" | "VP9" | "auto";
 export type QualityPreset = "quality" | "balanced" | "performance" | "custom";
 export type Resolution = "native" | "1080p" | "1440p" | "4K";
+export type DisplayMode = "contain" | "cover";
 
 // Bitrate steps in Mbps — each maps to kbps = value * 1000, last = null (unlimited)
 export const BITRATE_STEPS_MBPS = [3, 5, 8, 12, 20, 30, 50, 80] as const;
@@ -31,6 +32,12 @@ export interface StreamSettings {
   inputThrottleMs: number; // 0 = no throttle, 16 ≈ 60fps, 33 ≈ 30fps
   virtualGamepadSensitivity: number; // mouse pixels → right-stick axis (default 0.025)
   resolution: Resolution;
+  displayMode: DisplayMode;
+  showStats: boolean;
+  lowLatencyMode: boolean;
+  requestedBitrateKbps: number | null;
+  requestedFps: 30 | 60;
+  requestedCodec: Codec;
 }
 
 type PresetValues = Pick<StreamSettings, "maxBitrateKbps" | "targetFps" | "codec">;
@@ -53,6 +60,12 @@ export const DEFAULTS: StreamSettings = {
   inputThrottleMs: 0,
   virtualGamepadSensitivity: 0.025,
   resolution: "native",
+  displayMode: "contain",
+  showStats: false,
+  lowLatencyMode: true,
+  requestedBitrateKbps: null,
+  requestedFps: 60,
+  requestedCodec: "auto",
 };
 
 const STORAGE_KEY = "windirector_settings";
