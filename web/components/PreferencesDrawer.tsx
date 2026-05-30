@@ -20,6 +20,9 @@ export default function PreferencesDrawer({ user }: { user?: User }) {
   const { settings, update } = useWebSettings();
 
   const isVerso = pathname?.includes("/verso");
+  const requestedBitrateLabel = settings.requestedBitrateKbps
+    ? `${settings.requestedBitrateKbps / 1000} Mbps`
+    : "Illimité";
 
   const name = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "";
   const avatar = user?.user_metadata?.avatar_url;
@@ -105,26 +108,115 @@ export default function PreferencesDrawer({ user }: { user?: User }) {
                   ))}
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.45rem" }}>
-                <span style={{ fontSize: "0.82rem", color: "var(--tx-2, #6d6057)" }}>Stats overlay</span>
-                <button
-                  type="button"
-                  style={{
-                    width: 36, height: 20, borderRadius: 999, border: "none", padding: 0,
-                    background: settings.showStats ? "#d97757" : "rgba(18,18,18,0.14)",
-                    cursor: "pointer", position: "relative", transition: "background 200ms",
-                  }}
-                  onClick={() => update({ showStats: !settings.showStats })}
-                >
-                  <span style={{
-                    display: "block", width: 14, height: 14, borderRadius: "50%", background: "#fff",
-                    position: "absolute", top: 3, left: settings.showStats ? 19 : 3,
-                    transition: "left 200ms", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-                  }} />
-                </button>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.45rem" }}>
+              <span style={{ fontSize: "0.82rem", color: "var(--tx-2, #6d6057)" }}>Stats overlay</span>
+              <button
+                type="button"
+                style={{
+                  width: 36, height: 20, borderRadius: 999, border: "none", padding: 0,
+                  background: settings.showStats ? "#d97757" : "rgba(18,18,18,0.14)",
+                  cursor: "pointer", position: "relative", transition: "background 200ms",
+                }}
+                onClick={() => update({ showStats: !settings.showStats })}
+              >
+                <span style={{
+                  display: "block", width: 14, height: 14, borderRadius: "50%", background: "#fff",
+                  position: "absolute", top: 3, left: settings.showStats ? 19 : 3,
+                  transition: "left 200ms", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                }} />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.45rem" }}>
+              <span style={{ fontSize: "0.82rem", color: "var(--tx-2, #6d6057)" }}>Mode basse latence</span>
+              <button
+                type="button"
+                className={`pref-toggle-pill${settings.lowLatencyMode ? " is-on" : ""}`}
+                onClick={() => update({ lowLatencyMode: !settings.lowLatencyMode })}
+                aria-pressed={settings.lowLatencyMode}
+              >
+                <span className="pref-toggle-pill-knob" />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.45rem" }}>
+              <span style={{ fontSize: "0.82rem", color: "var(--tx-2, #6d6057)" }}>Décodage matériel</span>
+              <button
+                type="button"
+                className={`pref-toggle-pill${settings.hardwareDecode ? " is-on" : ""}`}
+                onClick={() => update({ hardwareDecode: !settings.hardwareDecode })}
+                aria-pressed={settings.hardwareDecode}
+              >
+                <span className="pref-toggle-pill-knob" />
+              </button>
+            </div>
+
+            <div style={{ marginTop: "0.55rem" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.35rem" }}>
+                <span style={{ fontSize: "0.82rem", color: "var(--tx-2, #6d6057)" }}>Sensibilité tactile</span>
+                <span style={{ fontSize: "0.72rem", color: "var(--tx-3, #9a8f86)" }}>{settings.touchSensitivity.toFixed(1)}×</span>
+              </div>
+              <input
+                type="range"
+                className="pref-slider"
+                min={0.5}
+                max={2}
+                step={0.1}
+                value={settings.touchSensitivity}
+                onChange={(e) => update({ touchSensitivity: parseFloat(e.target.value) })}
+                style={{ width: "100%" }}
+              />
+            </div>
+          </div>
+
+          {/* ── Qualité demandée au Recto ── */}
+          <div className="main-preferences-group">
+            <p className="main-preferences-group-title">Qualité Recto</p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
+              <span style={{ fontSize: "0.82rem", color: "var(--tx-2, #6d6057)" }}>Codec</span>
+              <div style={{ display: "flex", gap: "0.3rem" }}>
+                {(["auto","H264","H265","AV1","VP9"] as const).map((c) => (
+                  <button key={c} type="button" className={`main-preferences-option${settings.requestedCodec === c ? " is-active" : ""}`}
+                    style={{ minHeight: 26, padding: "0 7px", fontSize: "0.72rem" }}
+                    onClick={() => update({ requestedCodec: c })}>
+                    {c === "auto" ? "Auto" : c}
+                  </button>
+                ))}
               </div>
             </div>
-          </>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.45rem" }}>
+              <span style={{ fontSize: "0.82rem", color: "var(--tx-2, #6d6057)" }}>FPS</span>
+              <div style={{ display: "flex", gap: "0.3rem" }}>
+                {[30,60].map((f) => (
+                  <button key={f} type="button" className={`main-preferences-option${settings.requestedFps === f ? " is-active" : ""}`}
+                    style={{ minHeight: 26, padding: "0 9px", fontSize: "0.72rem" }}
+                    onClick={() => update({ requestedFps: f as 30 | 60 })}>
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.35rem" }}>
+                <span style={{ fontSize: "0.82rem", color: "var(--tx-2, #6d6057)" }}>Bitrate</span>
+                <span style={{ fontSize: "0.72rem", color: "var(--tx-3, #9a8f86)" }}>{requestedBitrateLabel}</span>
+              </div>
+              <input
+                type="range"
+                className="pref-slider"
+                min={0}
+                max={80}
+                step={1}
+                value={settings.requestedBitrateKbps ? Math.min(80, settings.requestedBitrateKbps / 1000) : 0}
+                onChange={(e) => {
+                  const value = Number(e.target.value);
+                  update({ requestedBitrateKbps: value === 0 ? null : value * 1000 });
+                }}
+                style={{ width: "100%" }}
+              />
+            </div>
+          </div>
+        </>
         )}
 
         {user && (
