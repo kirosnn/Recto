@@ -6,6 +6,8 @@ build
 .env
 .env.local
 src-tauri/target
+src-tauri/target-*
+/.tauri-target
 src-tauri/gen
 web/.next
 web/node_modules
