@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-setup.ps1",
+    "setup:quick": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-setup.ps1 -SkipTauriBuild",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
