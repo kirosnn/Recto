@@ -240,6 +240,26 @@ export default function VersoPage() {
       }}
     >
       <BackButton href="/" />
+
+      {/* Avertissement recommandé d'utiliser l'app */}
+      <div
+        style={{
+          maxWidth: 420,
+          margin: "0 auto 24px",
+          padding: "14px 18px",
+          background: "rgba(217,119,87,0.1)",
+          border: "1px solid rgba(217,119,87,0.35)",
+          borderRadius: 12,
+          fontSize: "0.9rem",
+          color: "#d97757",
+          textAlign: "center",
+          lineHeight: 1.4,
+        }}
+      >
+        <strong>Recommandé :</strong> Utilisez l’application <strong>Recto</strong> (Windows) pour streamer.
+        Le client web est expérimental et ne permet pas un streaming stable.
+      </div>
+
       <div
         className="recto-form-inner"
         style={{ width: "100%", maxWidth: "360px" }}
