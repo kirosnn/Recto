@@ -91,6 +91,12 @@ pub trait VideoEncoder {
     /// Force la prochaine frame à être une keyframe (IDR). Appelé sur réception
     /// d'un PLI/FIR côté transport (le récepteur a perdu le fil).
     fn request_keyframe(&mut self);
+
+    /// En-tête de séquence (SPS/PPS en Annex-B) à émettre avant la 1re frame.
+    /// Vide par défaut ; les encodeurs qui le séparent du flux le surchargent.
+    fn sequence_header(&self) -> Result<Vec<u8>> {
+        Ok(Vec::new())
+    }
 }
 
 /// Crée l'encodeur adapté au vendeur. Le device D3D11 DOIT être celui de la
