@@ -107,11 +107,12 @@ async function tuneVideoSender(pc: RTCPeerConnection, settings: StreamSettings) 
       delete enc.maxBitrate;
       delete (enc as Record<string, unknown>).minBitrate;
     }
-    // Quality preset keeps every pixel sharp (drops FPS under congestion);
-    // balanced/performance keep the framerate fluid and stable (drop resolution
-    // instead), which matches the goal of smooth, stable FPS for remote control.
+    // Keep the FULL resolution under load (drop FPS instead of downscaling).
+    // This both keeps text/UI razor-sharp AND makes the encoder spend its bit
+    // budget on full-res detail rather than shrinking to 720p — so quality and
+    // bitrate utilisation both go up. Only "performance" trades res for fluidity.
     (params as RTCRtpSendParameters & { degradationPreference?: string }).degradationPreference =
-      settings.preset === "quality" ? "maintain-resolution" : "maintain-framerate";
+      settings.preset === "performance" ? "maintain-framerate" : "maintain-resolution";
     (enc as Record<string, unknown>).priority = "high";
     (enc as Record<string, unknown>).networkPriority = "high";
     (enc as Record<string, unknown>).scalabilityMode = "L1T1";
@@ -134,9 +135,15 @@ export function applyBitrateToSdp(sdp: string, settings: StreamSettings): string
     // recovers only slowly (additive increase) — the spiral that pins the stream
     // at kb-level. 8 Mbps is high enough to look good immediately on any decent
     // link, low enough that the estimator corrects down within a frame or two.
+    // Start HIGH so quality (and bitrate utilisation) reach the target fast on a
+    // good link. The estimator still corrects down within a frame or two if the
+    // link can't sustain it, so the only cost on a weak link is a brief overshoot
+    // — while on LAN/localhost it means the stream looks full-quality immediately
+    // instead of crawling up from a few Mbps. Capped at 20 Mbps to avoid a huge
+    // first-frame burst.
     const startKbps = maxKbps === null
-      ? 8_000
-      : Math.min(maxKbps, Math.max(2_000, Math.round(maxKbps * 0.5)), 8_000);
+      ? 20_000
+      : Math.min(maxKbps, Math.max(4_000, Math.round(maxKbps * 0.7)), 20_000);
     // Absolute floor (not a fraction of max) so the encoder can ride all the way
     // down to a bad link instead of being pinned above its real capacity.
     const minKbps = 400;
@@ -192,8 +199,11 @@ function applyContentHint(stream: MediaStream, settings: StreamSettings) {
   // movement smooth (favors temporal continuity). The quality preset is the only
   // one that trades fluidity for sharpness — everything else prioritizes smooth,
   // stable FPS, which is what feels best for remote control.
-  const contentHint =
-    settings.preset === "quality" ? "detail" : settings.targetFps >= 60 ? "motion" : "detail";
+  // "detail" favours spatial sharpness (every pixel crisp), "motion" favours
+  // temporal smoothness. Since we now keep full resolution under load
+  // (maintain-resolution), bias toward "detail" so text/UI stay razor-sharp;
+  // only "performance" (which trades resolution for fluidity) prefers "motion".
+  const contentHint = settings.preset === "performance" ? "motion" : "detail";
 
   for (const track of stream.getVideoTracks()) {
     try {
