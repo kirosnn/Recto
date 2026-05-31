@@ -107,15 +107,8 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
     }
     try {
       const videoConstraints: MediaTrackConstraints & { cursor?: string } = {
-        // Demande explicite d'un PLANCHER de framerate. Sans `min`, Chromium
-        // auto-throttle la capture d'écran qu'il juge "calme" et tombe à ~20 fps
-        // même GPU au repos — ce qui donne une navigation saccadée. Un `min` élevé
-        // force le capturer à tenir la cadence en continu. Le coût (frames
-        // dupliquées sur écran figé) est négligeable : l'encodeur les compresse
-        // quasi à zéro, et la fluidité ressentie prime pour du contrôle distant.
-        frameRate: { min: Math.min(settings.targetFps, 30), ideal: settings.targetFps, max: settings.targetFps },
+        frameRate: { ideal: settings.targetFps, max: settings.targetFps },
         cursor: "always",
-        resizeMode: "none",
       };
       if (settings.resolution !== "native") {
         const resMap: Record<string, number> = { "1080p": 1080, "1440p": 1440, "4K": 2160 };
