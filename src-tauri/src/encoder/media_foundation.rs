@@ -48,21 +48,16 @@ pub struct MediaFoundationEncoder {
     _device_manager: IMFDXGIDeviceManager,
     force_keyframe: bool,
     streaming: bool,
-    /// File de frames converties en attente d'être poussées (sur NeedInput). Une
-    /// Option simple écrasait la frame précédente quand le MFT n'avait pas encore
-    /// réclamé d'entrée → ~1 frame sur 3 perdue (37 fps au lieu de 60). Une petite
-    /// file absorbe le décalage entre notre cadence de capture et le rythme auquel
-    /// le MFT consomme.
-    input_queue: std::collections::VecDeque<IMFSample>,
-    /// Frames jetées parce que la file était pleine (diagnostic backpressure).
-    dropped_frames: u64,
+    /// Frame convertie en attente d'être poussée (sur événement NeedInput).
+    /// NOTE: un seul slot — pas une file. Le sample enveloppe la texture NV12
+    /// INTERNE du convertisseur, qui est écrasée à chaque convert(). Bufferiser
+    /// plusieurs samples ferait pointer plusieurs entrées vers la même mémoire
+    /// déjà réécrite → corruption. Pour un vrai pipeline 60 fps sans perte, il
+    /// faudra un POOL de textures NV12 (une par frame en vol) — étape dédiée.
+    pending_input: Option<IMFSample>,
     /// NAL H264 produits, vidés par drain().
     output_packets: Vec<EncodedPacket>,
 }
-
-/// Profondeur max de la file d'entrée. Au-delà, on jette (l'encodeur ne suit pas) ;
-/// borné pour ne pas accumuler de latence sans fin.
-const MAX_INPUT_QUEUE: usize = 6;
 
 impl MediaFoundationEncoder {
     pub fn new(vendor: Vendor, device: &ID3D11Device, config: EncoderConfig) -> Result<Self> {
@@ -113,8 +108,7 @@ impl MediaFoundationEncoder {
                 _device_manager: device_manager,
                 force_keyframe: false,
                 streaming: false,
-                input_queue: std::collections::VecDeque::new(),
-                dropped_frames: 0,
+                pending_input: None,
                 output_packets: Vec::new(),
             })
         }
@@ -175,16 +169,12 @@ impl VideoEncoder for MediaFoundationEncoder {
             let frame_duration = 10_000_000i64 / self.config.framerate.max(1) as i64;
             sample.SetSampleDuration(frame_duration)?;
 
-            // Met la frame en file ; elle sera poussée quand le MFT réclame une
-            // entrée (événement METransformNeedInput). On ne PEUT PAS appeler
-            // ProcessInput / ProcessOutput hors du flux d'événements d'un MFT async
-            // (sinon E_UNEXPECTED 0x8000FFFF). Si la file est pleine, l'encodeur ne
-            // suit pas : on jette la plus ancienne plutôt que d'accumuler du retard.
-            if self.input_queue.len() >= MAX_INPUT_QUEUE {
-                self.input_queue.pop_front();
-                self.dropped_frames += 1;
-            }
-            self.input_queue.push_back(sample);
+            // Mémorise la frame ; elle sera poussée quand le MFT réclame une entrée
+            // (événement METransformNeedInput). On ne PEUT PAS appeler ProcessInput
+            // / ProcessOutput hors du flux d'événements d'un MFT async (sinon
+            // E_UNEXPECTED 0x8000FFFF). On pompe immédiatement pour pousser sans
+            // attendre la frame suivante.
+            self.pending_input = Some(sample);
             self.pump_events()?;
             Ok(())
         }
@@ -202,10 +192,6 @@ impl VideoEncoder for MediaFoundationEncoder {
 
     fn sequence_header(&self) -> Result<Vec<u8>> {
         MediaFoundationEncoder::sequence_header(self)
-    }
-
-    fn dropped_frames(&self) -> u64 {
-        self.dropped_frames
     }
 }
 
@@ -226,7 +212,7 @@ impl MediaFoundationEncoder {
             let evt_type = MF_EVENT_TYPE(evt.GetType()? as i32);
 
             if evt_type == METransformNeedInput {
-                if let Some(sample) = self.input_queue.pop_front() {
+                if let Some(sample) = self.pending_input.take() {
                     self.transform.ProcessInput(0, &sample, 0)?;
                 }
                 // Sinon : pas de frame prête, on ignore (le MFT redemandera).
