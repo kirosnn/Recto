@@ -31,8 +31,7 @@ pub struct ColorConverter {
     video_context: ID3D11VideoContext,
     enumerator: ID3D11VideoProcessorEnumerator,
     processor: ID3D11VideoProcessor,
-    /// Texture NV12 de destination, réutilisée à chaque frame.
-    nv12: ID3D11Texture2D,
+    nv12_textures: Vec<ID3D11Texture2D>,
     width: u32,
     height: u32,
 }
@@ -47,10 +46,16 @@ impl ColorConverter {
             // Description du flux : entrée et sortie à la même résolution/cadence.
             let content_desc = D3D11_VIDEO_PROCESSOR_CONTENT_DESC {
                 InputFrameFormat: D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE,
-                InputFrameRate: DXGI_RATIONAL { Numerator: 60, Denominator: 1 },
+                InputFrameRate: DXGI_RATIONAL {
+                    Numerator: 60,
+                    Denominator: 1,
+                },
                 InputWidth: width,
                 InputHeight: height,
-                OutputFrameRate: DXGI_RATIONAL { Numerator: 60, Denominator: 1 },
+                OutputFrameRate: DXGI_RATIONAL {
+                    Numerator: 60,
+                    Denominator: 1,
+                },
                 OutputWidth: width,
                 OutputHeight: height,
                 Usage: D3D11_VIDEO_USAGE_PLAYBACK_NORMAL,
@@ -83,31 +88,43 @@ impl ColorConverter {
                 MipLevels: 1,
                 ArraySize: 1,
                 Format: DXGI_FORMAT_NV12,
-                SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+                SampleDesc: DXGI_SAMPLE_DESC {
+                    Count: 1,
+                    Quality: 0,
+                },
                 Usage: D3D11_USAGE_DEFAULT,
                 BindFlags: D3D11_BIND_RENDER_TARGET.0 as u32,
                 CPUAccessFlags: 0,
                 MiscFlags: 0,
             };
-            let mut nv12: Option<ID3D11Texture2D> = None;
-            device.CreateTexture2D(&nv12_desc, None, Some(&mut nv12))?;
-            let nv12 = nv12.ok_or_else(|| anyhow!("création texture NV12 échouée"))?;
+            let mut nv12_textures = Vec::with_capacity(8);
+            for _ in 0..8 {
+                let mut nv12: Option<ID3D11Texture2D> = None;
+                device.CreateTexture2D(&nv12_desc, None, Some(&mut nv12))?;
+                nv12_textures.push(nv12.ok_or_else(|| anyhow!("création texture NV12 échouée"))?);
+            }
 
             Ok(Self {
                 video_device,
                 video_context,
                 enumerator,
                 processor,
-                nv12,
+                nv12_textures,
                 width,
                 height,
             })
         }
     }
 
-    /// Convertit une texture BGRA source vers la texture NV12 interne, et renvoie
-    /// une référence à cette dernière (valide jusqu'au prochain appel).
-    pub fn convert(&mut self, bgra: &ID3D11Texture2D) -> Result<&ID3D11Texture2D> {
+    pub fn surface_count(&self) -> usize {
+        self.nv12_textures.len()
+    }
+
+    pub fn convert_into(
+        &mut self,
+        bgra: &ID3D11Texture2D,
+        surface_index: usize,
+    ) -> Result<&ID3D11Texture2D> {
         unsafe {
             // Vue d'entrée sur la texture BGRA.
             let in_desc = D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC {
@@ -130,8 +147,12 @@ impl ColorConverter {
                 Anonymous: Default::default(),
             };
             let mut output_view: Option<ID3D11VideoProcessorOutputView> = None;
+            let nv12 = self
+                .nv12_textures
+                .get(surface_index)
+                .ok_or_else(|| anyhow!("index NV12 invalide"))?;
             self.video_device.CreateVideoProcessorOutputView(
-                &self.nv12,
+                nv12,
                 &self.enumerator,
                 &out_desc,
                 Some(&mut output_view),
@@ -153,14 +174,10 @@ impl ColorConverter {
                 ppFutureSurfacesRight: std::ptr::null_mut(),
             };
 
-            self.video_context.VideoProcessorBlt(
-                &self.processor,
-                &output_view,
-                0,
-                &[stream],
-            )?;
+            self.video_context
+                .VideoProcessorBlt(&self.processor, &output_view, 0, &[stream])?;
 
-            Ok(&self.nv12)
+            Ok(nv12)
         }
     }
 
