@@ -9,8 +9,11 @@ import {
   bitrateStepToKbps,
   kbpsToStepIdx,
   bitrateLabel,
+  ENGINE_INFO,
+  ENGINE_LABELS,
   type QualityPreset,
   type Resolution,
+  type StreamEngine,
 } from "../../../../src/lib/settings";
 
 const PRESET_LABELS: Record<Exclude<QualityPreset, "custom">, { label: string; hint: string }> = {
@@ -76,6 +79,64 @@ export default function SettingsPage() {
               ))}
             </div>
           </Row>
+        </Section>
+
+        <Section label="Moteur de streaming" sub="Comment l'écran est capturé et encodé côté hôte">
+          <Block label="Moteur">
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {(["browser", "velocity"] as StreamEngine[]).map((engine) => {
+                const active = engine === "browser";
+                const disabled = engine === "velocity";
+                return (
+                  <button
+                    key={engine}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => update({ engine: "browser" })}
+                    style={{
+                      flex: "1 1 200px",
+                      textAlign: "left",
+                      padding: "12px 14px",
+                      borderRadius: 12,
+                      cursor: disabled ? "not-allowed" : "pointer",
+                      opacity: disabled ? 0.5 : 1,
+                      border: active ? "1px solid transparent" : "1px solid var(--border-2)",
+                      background: active ? "var(--accent)" : "var(--bg-alt)",
+                      color: active ? "#f5f3ee" : "var(--tx)",
+                      transition: "all 160ms ease",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.9rem", fontWeight: 600 }}>
+                      {ENGINE_LABELS[engine]}
+                      {engine === "velocity" && (
+                        <span
+                          style={{
+                            fontSize: "0.6rem",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.06em",
+                            padding: "1px 6px",
+                            borderRadius: 5,
+                            background: "rgba(217,119,87,0.15)",
+                            color: "#d97757",
+                          }}
+                        >
+                          App desktop
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: "0.72rem", lineHeight: 1.45, marginTop: 4, color: active ? "rgba(245,243,238,0.7)" : "var(--tx-3)" }}>
+                      {ENGINE_INFO[engine]}
+                    </div>
+                    {disabled && (
+                      <div style={{ fontSize: "0.68rem", marginTop: 6, color: "var(--tx-3)" }}>
+                        Disponible uniquement dans l'app de bureau.
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </Block>
         </Section>
 
         <Section label="Hôte · Recto" sub="Paramètres de capture et d'encodage vidéo">
