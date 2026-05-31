@@ -20,6 +20,7 @@
 use anyhow::Result;
 use windows::Win32::Graphics::Direct3D11::{ID3D11Device, ID3D11Texture2D};
 
+pub mod amf_direct;
 pub mod color_convert;
 pub mod media_foundation;
 
@@ -60,14 +61,27 @@ pub struct EncoderConfig {
 
 impl Default for EncoderConfig {
     fn default() -> Self {
+        Self::for_desktop(1920, 1080)
+    }
+}
+
+impl EncoderConfig {
+    pub fn for_desktop(width: u32, height: u32) -> Self {
+        let pixels = width as u64 * height as u64;
+        let bitrate_bps = ((pixels * 60 * 36) / 100).clamp(35_000_000, 180_000_000) as u32;
+
         Self {
-            width: 1920,
-            height: 1080,
+            width,
+            height,
             framerate: 60,
-            bitrate_bps: 20_000_000,
+            bitrate_bps,
             gop_length: 0,
             low_latency: true,
         }
+    }
+
+    pub fn is_resolution_allowed(&self, desktop_width: u32, desktop_height: u32) -> bool {
+        desktop_width < 1920 || desktop_height < 1080 || (self.width >= 1920 && self.height >= 1080)
     }
 }
 
@@ -77,6 +91,13 @@ pub struct EncodedPacket {
     pub is_keyframe: bool,
     /// Timestamp de présentation, en unités de 100 ns (unité native MF).
     pub timestamp_100ns: i64,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct EncoderDiagnostics {
+    pub convert_ms: f64,
+    pub process_input_ms: f64,
+    pub pump_ms: f64,
 }
 
 /// Interface commune à tous les encodeurs matériels, quel que soit le vendeur.
@@ -103,6 +124,10 @@ pub trait VideoEncoder {
     fn dropped_frames(&self) -> u64 {
         0
     }
+
+    fn diagnostics(&self) -> EncoderDiagnostics {
+        EncoderDiagnostics::default()
+    }
 }
 
 /// Crée l'encodeur adapté au vendeur. Le device D3D11 DOIT être celui de la
@@ -112,12 +137,15 @@ pub fn create_encoder(
     device: &ID3D11Device,
     config: EncoderConfig,
 ) -> Result<Box<dyn VideoEncoder>> {
-    // Toutes les branches passent aujourd'hui par Media Foundation, mais on garde
-    // le dispatch par vendeur explicite : c'est le point d'extension pour brancher
-    // une impl AMF (AMD) ou NVENC (NVIDIA) native plus tard, sans rien changer
-    // ailleurs.
     match vendor {
-        Vendor::Amd | Vendor::Nvidia | Vendor::Intel | Vendor::Unknown => {
+        Vendor::Amd => match amf_direct::AmfDirectEncoder::new(device, config.clone()) {
+            Ok(enc) => Ok(Box::new(enc)),
+            Err(_) => {
+                let enc = media_foundation::MediaFoundationEncoder::new(vendor, device, config)?;
+                Ok(Box::new(enc))
+            }
+        },
+        Vendor::Nvidia | Vendor::Intel | Vendor::Unknown => {
             let enc = media_foundation::MediaFoundationEncoder::new(vendor, device, config)?;
             Ok(Box::new(enc))
         }
