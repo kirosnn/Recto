@@ -25,23 +25,14 @@ use windows::Win32::Graphics::Dxgi::Common::{
     DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_NV12, DXGI_RATIONAL, DXGI_SAMPLE_DESC,
 };
 
-/// Nombre de textures NV12 dans le pool tournant. Une seule texture réutilisée
-/// causait une corruption : tant qu'un IMFSample précédent n'était pas consommé
-/// par l'encodeur, le convert() suivant écrasait la mémoire qu'il référençait.
-/// Un petit pool donne à chaque frame en vol sa propre texture.
-const NV12_POOL_SIZE: usize = 4;
-
-/// Convertisseur BGRA→NV12 réutilisable. Écrit dans un POOL de textures NV12 en
-/// rotation pour que plusieurs frames puissent être en vol sans s'aliaser.
+/// Convertisseur BGRA→NV12 réutilisable (alloue la texture de sortie une fois).
 pub struct ColorConverter {
     video_device: ID3D11VideoDevice,
     video_context: ID3D11VideoContext,
     enumerator: ID3D11VideoProcessorEnumerator,
     processor: ID3D11VideoProcessor,
-    /// Pool de textures NV12 de destination, utilisées à tour de rôle.
-    nv12_pool: Vec<ID3D11Texture2D>,
-    /// Index de la prochaine texture du pool à écrire.
-    next_idx: usize,
+    /// Texture NV12 de destination, réutilisée à chaque frame.
+    nv12: ID3D11Texture2D,
     width: u32,
     height: u32,
 }
@@ -85,7 +76,7 @@ impl ColorConverter {
                 DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709,
             );
 
-            // Pool de textures NV12 de sortie (BIND_RENDER_TARGET requis pour le VP).
+            // Texture NV12 de sortie (BIND_RENDER_TARGET requis pour le VP).
             let nv12_desc = D3D11_TEXTURE2D_DESC {
                 Width: width,
                 Height: height,
@@ -98,35 +89,26 @@ impl ColorConverter {
                 CPUAccessFlags: 0,
                 MiscFlags: 0,
             };
-            let mut nv12_pool = Vec::with_capacity(NV12_POOL_SIZE);
-            for _ in 0..NV12_POOL_SIZE {
-                let mut tex: Option<ID3D11Texture2D> = None;
-                device.CreateTexture2D(&nv12_desc, None, Some(&mut tex))?;
-                nv12_pool.push(tex.ok_or_else(|| anyhow!("création texture NV12 échouée"))?);
-            }
+            let mut nv12: Option<ID3D11Texture2D> = None;
+            device.CreateTexture2D(&nv12_desc, None, Some(&mut nv12))?;
+            let nv12 = nv12.ok_or_else(|| anyhow!("création texture NV12 échouée"))?;
 
             Ok(Self {
                 video_device,
                 video_context,
                 enumerator,
                 processor,
-                nv12_pool,
-                next_idx: 0,
+                nv12,
                 width,
                 height,
             })
         }
     }
 
-    /// Convertit une texture BGRA source vers la PROCHAINE texture NV12 du pool,
-    /// et renvoie un clone (COM ref-compté) de cette texture. Le clone garde la
-    /// texture vivante tant que l'encodeur en a besoin, sans bloquer la rotation.
-    pub fn convert(&mut self, bgra: &ID3D11Texture2D) -> Result<ID3D11Texture2D> {
+    /// Convertit une texture BGRA source vers la texture NV12 interne, et renvoie
+    /// une référence à cette dernière (valide jusqu'au prochain appel).
+    pub fn convert(&mut self, bgra: &ID3D11Texture2D) -> Result<&ID3D11Texture2D> {
         unsafe {
-            // Choisit la texture cible dans le pool (rotation) et avance l'index.
-            let target = self.nv12_pool[self.next_idx].clone();
-            self.next_idx = (self.next_idx + 1) % self.nv12_pool.len();
-
             // Vue d'entrée sur la texture BGRA.
             let in_desc = D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC {
                 FourCC: 0,
@@ -142,14 +124,14 @@ impl ColorConverter {
             )?;
             let input_view = input_view.ok_or_else(|| anyhow!("input view nulle"))?;
 
-            // Vue de sortie sur la texture NV12 cible du pool.
+            // Vue de sortie sur la texture NV12.
             let out_desc = D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC {
                 ViewDimension: D3D11_VPOV_DIMENSION_TEXTURE2D,
                 Anonymous: Default::default(),
             };
             let mut output_view: Option<ID3D11VideoProcessorOutputView> = None;
             self.video_device.CreateVideoProcessorOutputView(
-                &target,
+                &self.nv12,
                 &self.enumerator,
                 &out_desc,
                 Some(&mut output_view),
@@ -178,7 +160,7 @@ impl ColorConverter {
                 &[stream],
             )?;
 
-            Ok(target)
+            Ok(&self.nv12)
         }
     }
 

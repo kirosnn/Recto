@@ -19,7 +19,7 @@ use windows::Win32::Graphics::Direct3D::{
 };
 use windows::Win32::Graphics::Direct3D11::{
     D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D,
-    D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC,
+    D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION,
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT;
 use windows::Win32::Graphics::Dxgi::{
@@ -105,43 +105,6 @@ impl DesktopDuplicator {
     /// (largeur, hauteur) du bureau capturé.
     pub fn dimensions(&self) -> (u32, u32) {
         (self.desc.ModeDesc.Width, self.desc.ModeDesc.Height)
-    }
-
-    /// Crée une texture BGRA vide aux mêmes dimensions/format que le bureau, que
-    /// l'appelant POSSÈDE (contrairement à la texture d'`acquire`, libérée au
-    /// prochain acquire). Sert de destination à `copy_into` pour conserver une
-    /// frame vivante et la ré-encoder (cadence fixe / écran figé).
-    pub fn create_owned_texture(&self) -> Result<ID3D11Texture2D> {
-        unsafe {
-            let desc = D3D11_TEXTURE2D_DESC {
-                Width: self.desc.ModeDesc.Width,
-                Height: self.desc.ModeDesc.Height,
-                MipLevels: 1,
-                ArraySize: 1,
-                Format: self.desc.ModeDesc.Format,
-                SampleDesc: windows::Win32::Graphics::Dxgi::Common::DXGI_SAMPLE_DESC {
-                    Count: 1,
-                    Quality: 0,
-                },
-                Usage: windows::Win32::Graphics::Direct3D11::D3D11_USAGE_DEFAULT,
-                // SHADER_RESOURCE pour que le VideoProcessor puisse la lire en entrée.
-                BindFlags: windows::Win32::Graphics::Direct3D11::D3D11_BIND_SHADER_RESOURCE.0
-                    as u32,
-                CPUAccessFlags: 0,
-                MiscFlags: 0,
-            };
-            let mut tex: Option<ID3D11Texture2D> = None;
-            self.device.CreateTexture2D(&desc, None, Some(&mut tex))?;
-            tex.ok_or_else(|| anyhow!("création texture BGRA persistante échouée"))
-        }
-    }
-
-    /// Copie une texture source (frame capturée) dans `dst` (texture possédée par
-    /// l'appelant). GPU→GPU, pas de copie CPU.
-    pub fn copy_into(&self, dst: &ID3D11Texture2D, src: &ID3D11Texture2D) {
-        unsafe {
-            self._context.CopyResource(dst, src);
-        }
     }
 
     /// Format de pixel DXGI (typiquement DXGI_FORMAT_B8G8R8A8_UNORM).

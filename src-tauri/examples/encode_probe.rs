@@ -81,58 +81,34 @@ fn main() {
     std::thread::sleep(Duration::from_secs(3));
     let _ = dup.acquire(0); // vide la frame de warmup
 
-    // 5. Boucle à CADENCE FIXE 60 Hz, avec COPIE de texture pour le 60 fps
-    //    constant : la texture Desktop Duplication n'est valide que jusqu'au
-    //    prochain acquire(). On la copie donc immédiatement (CopyResource GPU→GPU)
-    //    dans une texture qu'on POSSÈDE. Ensuite on encode cette copie à chaque
-    //    tick — qu'elle soit fraîche ou répétée (écran figé) — ce qui garantit
-    //    60 frames/s en sortie même quand le bureau ne change pas.
-    let owned = dup.create_owned_texture().expect("texture BGRA persistante");
-    let mut have_frame = false; // a-t-on au moins une frame copiée à encoder ?
-
+    // 5. Boucle capture→encode→fichier. On encode CHAQUE frame fraîche
+    //    IMMÉDIATEMENT : la texture Desktop Duplication n'est valide que jusqu'au
+    //    prochain acquire() (qui la libère). On ne peut donc PAS la stocker pour
+    //    l'encoder à un tick ultérieur — ça donne E_INVALIDARG sur texture morte.
+    //    (La cadence fixe 60 Hz avec ré-encodage sur écran figé nécessitera une
+    //    COPIE de la texture dans une ressource qu'on possède — étape suivante.)
     let probe = Duration::from_secs(10);
     let start = Instant::now();
     let mut encoded_frames = 0u64;
-    let mut fresh = 0u64;
-    let mut repeated = 0u64;
     let mut encoded_packets = 0u64;
     let mut bytes_written = 0u64;
-    let frame_interval = Duration::from_micros(1_000_000 / 60); // 60 Hz
+    let frame_interval = Duration::from_micros(1_000_000 / 60);
     let mut next_tick = Instant::now();
 
     while start.elapsed() < probe {
-        // Récupère la frame la plus récente sans bloquer (vide la file DXGI) et la
-        // copie dans notre texture possédée tant qu'elle est encore valide.
-        let mut got_fresh = false;
-        loop {
-            match dup.acquire(0) {
-                Ok(Some(frame)) => {
-                    dup.copy_into(&owned, &frame.texture);
-                    have_frame = true;
-                    got_fresh = true;
-                    // continue à pomper pour garder la PLUS récente
-                }
-                Ok(None) => break,
-                Err(e) => {
-                    eprintln!("[encode_probe] capture err: {e}");
-                    break;
+        // Bloque jusqu'à 16 ms pour la prochaine frame, puis encode tout de suite.
+        match dup.acquire(16) {
+            Ok(Some(frame)) => {
+                let ts_100ns = start.elapsed().as_nanos() as i64 / 100;
+                match enc.encode(&frame.texture, ts_100ns) {
+                    Ok(()) => encoded_frames += 1,
+                    Err(e) => eprintln!("[encode_probe] encode err: {e}"),
                 }
             }
-        }
-
-        // Encode la texture possédée (copie fraîche ou répétée) à ce tick.
-        if have_frame {
-            let ts_100ns = start.elapsed().as_nanos() as i64 / 100;
-            match enc.encode(&owned, ts_100ns) {
-                Ok(()) => {
-                    encoded_frames += 1;
-                    if got_fresh {
-                        fresh += 1;
-                    } else {
-                        repeated += 1;
-                    }
-                }
-                Err(e) => eprintln!("[encode_probe] encode err: {e}"),
+            Ok(None) => {} // écran figé : rien de neuf
+            Err(e) => {
+                eprintln!("[encode_probe] capture err: {e}");
+                std::thread::sleep(Duration::from_millis(20));
             }
         }
 
@@ -148,7 +124,7 @@ fn main() {
             Err(e) => eprintln!("[encode_probe] drain err: {e}"),
         }
 
-        // Cadence fixe 60 Hz.
+        // Pacing léger pour ne pas spinner à vide quand l'écran est figé.
         next_tick += frame_interval;
         let now = Instant::now();
         if next_tick > now {
@@ -164,8 +140,6 @@ fn main() {
     println!("\n[encode_probe] ===== RÉSULTAT =====");
     println!("  durée             : {secs:.1} s");
     println!("  frames encodées   : {encoded_frames} ({:.1} fps)", encoded_frames as f64 / secs);
-    println!("    dont fraîches   : {fresh}");
-    println!("    dont répétées   : {repeated} (écran figé, ré-encodage)");
     println!("  paquets H264      : {encoded_packets}");
     println!("  taille écrite     : {:.2} Mo", bytes_written as f64 / 1_000_000.0);
     println!("  bitrate effectif  : {:.1} Mbps", (bytes_written as f64 * 8.0 / secs) / 1_000_000.0);
