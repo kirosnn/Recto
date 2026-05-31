@@ -1,6 +1,7 @@
-mod input;
+pub mod audio;
 mod gamepad;
 mod hw_encoder;
+mod input;
 
 use tauri::{Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -61,7 +62,12 @@ async fn get_auth_deep_links(app: tauri::AppHandle) -> Vec<String> {
 fn should_open_externally(url: &tauri::Url) -> bool {
     matches!(
         url.host_str(),
-        Some("discord.com" | "ptb.discord.com" | "canary.discord.com" | "fresxzlxizgvrtqlyunz.supabase.co")
+        Some(
+            "discord.com"
+                | "ptb.discord.com"
+                | "canary.discord.com"
+                | "fresxzlxizgvrtqlyunz.supabase.co"
+        )
     )
 }
 
@@ -104,7 +110,10 @@ pub fn run() {
             tauri::plugin::Builder::<tauri::Wry, ()>::new("external-auth-navigation")
                 .on_navigation(|webview, url| {
                     if should_open_externally(url) {
-                        let _ = webview.app_handle().opener().open_url(url.as_str(), None::<&str>);
+                        let _ = webview
+                            .app_handle()
+                            .opener()
+                            .open_url(url.as_str(), None::<&str>);
                         false
                     } else {
                         true
