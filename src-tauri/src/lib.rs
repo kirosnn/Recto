@@ -1,7 +1,10 @@
 pub mod audio;
+mod capture;
+mod encoder;
 mod gamepad;
 mod hw_encoder;
 mod input;
+mod velocity;
 
 use tauri::{Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -49,6 +52,16 @@ async fn gamepad_disconnect() {
 #[tauri::command]
 async fn get_hw_encoder_caps() -> hw_encoder::HwEncoderCaps {
     hw_encoder::detect()
+}
+
+#[tauri::command]
+async fn velocity_caps() -> velocity::VelocityCaps {
+    velocity::caps()
+}
+
+#[tauri::command]
+async fn velocity_selftest() -> Result<velocity::VelocitySelfTest, String> {
+    velocity::selftest().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -148,6 +161,8 @@ pub fn run() {
             get_displays,
             gamepad_disconnect,
             get_hw_encoder_caps,
+            velocity_caps,
+            velocity_selftest,
             set_window_title,
             minimize_window,
             maximize_window,
