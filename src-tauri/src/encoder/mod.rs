@@ -20,6 +20,7 @@
 use anyhow::Result;
 use windows::Win32::Graphics::Direct3D11::{ID3D11Device, ID3D11Texture2D};
 
+pub mod color_convert;
 pub mod media_foundation;
 
 /// Vendeur de l'encodeur matériel ciblé. Détecté via [`crate::hw_encoder`].
