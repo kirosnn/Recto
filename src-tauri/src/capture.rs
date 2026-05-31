@@ -90,8 +90,7 @@ impl DesktopDuplicator {
                 .DuplicateOutput(&device)
                 .map_err(|e| anyhow!("DuplicateOutput a échoué: {e}"))?;
 
-            let mut desc = DXGI_OUTDUPL_DESC::default();
-            duplication.GetDesc(&mut desc);
+            let desc = duplication.GetDesc();
 
             Ok(Self {
                 device,
