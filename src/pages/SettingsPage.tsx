@@ -1,15 +1,23 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
 import { useSettings } from "../context/SettingsContext";
 import { useAuth } from "../context/useAuth";
+import { isTauri, invoke } from "@tauri-apps/api/core";
 import {
   BITRATE_STEPS_MBPS,
   bitrateStepToKbps,
   kbpsToStepIdx,
   bitrateLabel,
+  ENGINE_INFO,
+  ENGINE_LABELS,
   type QualityPreset,
   type Resolution,
+  type StreamEngine,
 } from "../lib/settings";
+
+// Velocity self-test result, returned by the `velocity_selftest` Tauri command.
+type VelocitySelfTest = { fps: number; bitrateMbps: number; encoder: string };
 
 const PRESET_LABELS: Record<Exclude<QualityPreset, "custom">, { label: string; hint: string }> = {
   quality:     { label: "Qualité",     hint: "LAN · 1440p–4K@60fps · 120 Mbps" },
@@ -44,6 +52,26 @@ export default function SettingsPage() {
   const avatar = user?.user_metadata?.avatar_url as string | undefined;
 
   const bitrateIdx = kbpsToStepIdx(settings.maxBitrateKbps);
+
+  // Velocity (native engine) is only available inside the desktop app.
+  const velocityAvailable = isTauri();
+  const [selfTest, setSelfTest] = useState<VelocitySelfTest | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [testError, setTestError] = useState<string | null>(null);
+
+  const runVelocityTest = async () => {
+    setTesting(true);
+    setTestError(null);
+    setSelfTest(null);
+    try {
+      const res = await invoke<VelocitySelfTest>("velocity_selftest");
+      setSelfTest(res);
+    } catch (e) {
+      setTestError(typeof e === "string" ? e : "Test indisponible");
+    } finally {
+      setTesting(false);
+    }
+  };
 
   return (
     <div style={{ height: "100%", overflowY: "auto", position: "relative" }}>
