@@ -6,6 +6,15 @@ const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun1.l.google.com:19302" },
 ];
 
+type CodecCap = { mimeType: string; sdpFmtpLine?: string };
+
+function isHwFriendlyH264(c: CodecCap): boolean {
+  const m = c.sdpFmtpLine?.match(/profile-level-id=([0-9a-fA-F]{6})/i);
+  if (!m) return false;
+  const profile = parseInt(m[1].slice(0, 2), 16);
+  return profile === 0x64 || profile === 0x4d;
+}
+
 function waitForIceGathering(pc: RTCPeerConnection, timeoutMs = 8000): Promise<void> {
   return new Promise<void>((resolve) => {
     if (pc.iceGatheringState === "complete") { resolve(); return; }
@@ -108,7 +117,8 @@ export class WebVersoConnection {
       if (!caps) continue;
 
       const all = caps.codecs;
-      const h264hw  = all.filter(c => c.mimeType === "video/H264");
+      const h264hw  = all.filter(c => c.mimeType === "video/H264" && isHwFriendlyH264(c));
+      const h264sw  = all.filter(c => c.mimeType === "video/H264" && !isHwFriendlyH264(c));
       const h265    = all.filter(c => c.mimeType === "video/H265");
       const av1     = all.filter(c => c.mimeType === "video/AV1");
       const vp9     = all.filter(c => c.mimeType === "video/VP9");
@@ -116,11 +126,11 @@ export class WebVersoConnection {
 
       let sorted: typeof all;
       switch (codec) {
-        case "H264": sorted = [...h264hw, ...h265, ...av1, ...vp9, ...rest]; break;
-        case "H265": sorted = [...h265, ...h264hw, ...av1, ...vp9, ...rest]; break;
-        case "AV1":  sorted = [...av1, ...h265, ...h264hw, ...vp9, ...rest]; break;
-        case "VP9":  sorted = [...vp9, ...h265, ...h264hw, ...av1, ...rest]; break;
-        default:     sorted = [...h264hw, ...av1, ...h265, ...vp9, ...rest];
+        case "H264": sorted = [...h264hw, ...h264sw, ...h265, ...av1, ...vp9, ...rest]; break;
+        case "H265": sorted = [...h265, ...h264hw, ...h264sw, ...av1, ...vp9, ...rest]; break;
+        case "AV1":  sorted = [...av1, ...h265, ...h264hw, ...h264sw, ...vp9, ...rest]; break;
+        case "VP9":  sorted = [...vp9, ...h265, ...h264hw, ...h264sw, ...av1, ...rest]; break;
+        default:     sorted = [...h264hw, ...h264sw, ...av1, ...h265, ...vp9, ...rest];
       }
       try { transceiver.setCodecPreferences(sorted.filter(Boolean)); } catch {}
     }
