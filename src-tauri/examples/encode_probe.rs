@@ -81,36 +81,49 @@ fn main() {
     std::thread::sleep(Duration::from_secs(3));
     let _ = dup.acquire(0); // vide la frame de warmup
 
-    // 5. Boucle capture→encode→fichier sur 10 s.
+    // 5. Boucle à CADENCE FIXE 60 Hz. Clé du "60 fps constant" : on encode une
+    //    frame à chaque tick de 16,67 ms, même si le bureau n'a pas changé — dans
+    //    ce cas on ré-encode la dernière texture capturée. Sans ça, un écran figé
+    //    ne produit aucune frame et la cadence s'effondre. La capture DXGI est
+    //    interrogée en non-bloquant (timeout 0) à chaque tick ; si elle a du neuf
+    //    on met à jour la texture courante, sinon on garde la précédente.
     let probe = Duration::from_secs(10);
     let start = Instant::now();
-    let mut captured = 0u64;
+    let mut encoded_frames = 0u64;
     let mut encoded_packets = 0u64;
     let mut bytes_written = 0u64;
-    let frame_interval = Duration::from_micros(1_000_000 / 60); // viser 60 fps
-    let mut next_frame = Instant::now();
+    let frame_interval = Duration::from_micros(1_000_000 / 60); // 60 Hz
+    let mut next_tick = Instant::now();
+
+    // Dernière texture capturée (clone COM ref-compté), réutilisée sur écran figé.
+    let mut last_texture: Option<windows::Win32::Graphics::Direct3D11::ID3D11Texture2D> = None;
 
     while start.elapsed() < probe {
-        // Pacing ~60 fps : encode au rythme régulier même si la capture varie.
-        match dup.acquire(8) {
-            Ok(Some(frame)) => {
-                let ts_100ns = start.elapsed().as_nanos() as i64 / 100;
-                if let Err(e) = enc.encode(&frame.texture, ts_100ns) {
-                    eprintln!("[encode_probe] encode err: {e}");
+        // Récupère la dernière frame dispo sans bloquer (vide la file DXGI).
+        loop {
+            match dup.acquire(0) {
+                Ok(Some(frame)) => {
+                    last_texture = Some(frame.texture);
+                    // on continue à pomper pour avoir la PLUS récente
                 }
-                captured += 1;
-            }
-            Ok(None) => {
-                // Écran figé : rien de neuf à capturer. (En prod : build-to-lossless
-                // ou ré-encodage de la dernière texture pour tenir le framerate.)
-            }
-            Err(e) => {
-                eprintln!("[encode_probe] capture err: {e}");
-                std::thread::sleep(Duration::from_millis(20));
+                Ok(None) => break, // plus rien de neuf
+                Err(e) => {
+                    eprintln!("[encode_probe] capture err: {e}");
+                    break;
+                }
             }
         }
 
-        // Draine les NAL prêts et les écrit.
+        // Encode la texture courante (fraîche ou répétée) à ce tick.
+        if let Some(tex) = &last_texture {
+            let ts_100ns = start.elapsed().as_nanos() as i64 / 100;
+            match enc.encode(tex, ts_100ns) {
+                Ok(()) => encoded_frames += 1,
+                Err(e) => eprintln!("[encode_probe] encode err: {e}"),
+            }
+        }
+
+        // Draine les NAL prêts.
         match enc.drain() {
             Ok(packets) => {
                 for p in packets {
@@ -122,12 +135,13 @@ fn main() {
             Err(e) => eprintln!("[encode_probe] drain err: {e}"),
         }
 
-        next_frame += frame_interval;
+        // Cadence fixe : dors jusqu'au prochain tick 60 Hz.
+        next_tick += frame_interval;
         let now = Instant::now();
-        if next_frame > now {
-            std::thread::sleep(next_frame - now);
+        if next_tick > now {
+            std::thread::sleep(next_tick - now);
         } else {
-            next_frame = now;
+            next_tick = now; // on a pris du retard, on resynchronise
         }
     }
 
@@ -135,11 +149,12 @@ fn main() {
     let secs = start.elapsed().as_secs_f64();
 
     println!("\n[encode_probe] ===== RÉSULTAT =====");
-    println!("  durée            : {secs:.1} s");
-    println!("  frames capturées : {captured} ({:.1}/s)", captured as f64 / secs);
-    println!("  paquets H264     : {encoded_packets}");
-    println!("  taille écrite    : {:.2} Mo", bytes_written as f64 / 1_000_000.0);
-    println!("  bitrate effectif : {:.1} Mbps", (bytes_written as f64 * 8.0 / secs) / 1_000_000.0);
+    println!("  durée             : {secs:.1} s");
+    println!("  frames encodées   : {encoded_frames} ({:.1} fps)", encoded_frames as f64 / secs);
+    println!("  paquets H264      : {encoded_packets}");
+    println!("  frames jetées     : {} (backpressure encodeur)", enc.dropped_frames());
+    println!("  taille écrite     : {:.2} Mo", bytes_written as f64 / 1_000_000.0);
+    println!("  bitrate effectif  : {:.1} Mbps", (bytes_written as f64 * 8.0 / secs) / 1_000_000.0);
     println!("\n  Fichier : {out_path}");
     println!("  → Ouvre-le dans VLC. S'il montre ton écran net et fluide,");
     println!("    le pipeline natif est validé bout en bout (capture+encode HW).");
