@@ -1,5 +1,5 @@
 {
-  "productName": "Recto Dev Verso",
+  "productName": "Verso Dev",
   "identifier": "com.recto.dev.verso",
   "build": {
     "devUrl": "http://localhost:5174",
@@ -10,7 +10,7 @@
       {
         "label": "main",
         "url": "/verso",
-        "title": "Verso",
+        "title": "Verso Dev",
         "width": 1280,
         "height": 800,
         "minWidth": 900,
@@ -21,5 +21,12 @@
         "center": true
       }
     ]
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["recto-dev-verso"]
+      }
+    }
   }
 }
