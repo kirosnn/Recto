@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
 import { useSettings } from "../context/SettingsContext";
@@ -16,7 +16,7 @@ import {
   type StreamEngine,
 } from "../lib/settings";
 
-// Velocity self-test result, returned by the `velocity_selftest` Tauri command.
+type VelocityCaps = { available: boolean; gpuName: string | null; vendor: string | null; encoder: string; audio: string };
 type VelocitySelfTest = { fps: number; bitrateMbps: number; encoder: string };
 
 const PRESET_LABELS: Record<Exclude<QualityPreset, "custom">, { label: string; hint: string }> = {
@@ -53,11 +53,27 @@ export default function SettingsPage() {
 
   const bitrateIdx = kbpsToStepIdx(settings.maxBitrateKbps);
 
-  // Velocity (native engine) is only available inside the desktop app.
-  const velocityAvailable = isTauri();
+  const desktopApp = isTauri();
+  const [velocityCaps, setVelocityCaps] = useState<VelocityCaps | null>(null);
   const [selfTest, setSelfTest] = useState<VelocitySelfTest | null>(null);
   const [testing, setTesting] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
+  const velocityAvailable = desktopApp && (velocityCaps?.available ?? true);
+
+  useEffect(() => {
+    if (!desktopApp) return;
+    let alive = true;
+    invoke<VelocityCaps>("velocity_caps")
+      .then((caps) => {
+        if (alive) setVelocityCaps(caps);
+      })
+      .catch(() => {
+        if (alive) setVelocityCaps(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [desktopApp]);
 
   const runVelocityTest = async () => {
     setTesting(true);
@@ -108,6 +124,124 @@ export default function SettingsPage() {
               ))}
             </div>
           </Row>
+        </Section>
+
+        <Section label="Moteur de streaming" sub="Comment l'écran est capturé et encodé côté hôte">
+          <Block label="Moteur">
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {(["browser", "velocity"] as StreamEngine[]).map((eng) => {
+                const active = settings.engine === eng;
+                const disabled = eng === "velocity" && !velocityAvailable;
+                return (
+                  <button
+                    key={eng}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => !disabled && update({ engine: eng })}
+                    style={{
+                      flex: "1 1 200px",
+                      textAlign: "left",
+                      padding: "12px 14px",
+                      borderRadius: 12,
+                      cursor: disabled ? "not-allowed" : "pointer",
+                      opacity: disabled ? 0.5 : 1,
+                      border: active ? "1px solid transparent" : "1px solid var(--border-2)",
+                      background: active ? "var(--accent)" : "var(--bg-alt)",
+                      color: active ? "#f5f3ee" : "var(--tx)",
+                      transition: "all 160ms ease",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.9rem", fontWeight: 600 }}>
+                      {ENGINE_LABELS[eng]}
+                      {eng === "velocity" && (
+                        <span style={{
+                          fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.06em",
+                          padding: "1px 6px", borderRadius: 5,
+                          background: active ? "rgba(245,243,238,0.18)" : "rgba(217,119,87,0.15)",
+                          color: active ? "#f5f3ee" : "#d97757",
+                        }}>Expérimental</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: "0.72rem", lineHeight: 1.45, marginTop: 4, color: active ? "rgba(245,243,238,0.7)" : "var(--tx-3)" }}>
+                      {ENGINE_INFO[eng]}
+                    </div>
+                    {disabled && (
+                      <div style={{ fontSize: "0.68rem", marginTop: 6, color: "var(--tx-3)" }}>
+                        {desktopApp ? "Velocity est indisponible sur cette machine." : "Disponible uniquement sur l'app de bureau."}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </Block>
+
+          {settings.engine === "velocity" && velocityAvailable && (
+            <>
+              <Block label="Images par seconde (Velocity)">
+                <div className="pref-options pref-options-inline">
+                  {([30, 60] as const).map((fps) => (
+                    <button
+                      key={fps}
+                      type="button"
+                      className={`pref-option pref-option-sm${settings.velocityTargetFps === fps ? " is-active" : ""}`}
+                      onClick={() => update({ velocityTargetFps: fps })}
+                    >
+                      {fps} fps
+                    </button>
+                  ))}
+                </div>
+              </Block>
+
+              <Block label="Résolution (Velocity)">
+                <div className="pref-options pref-options-inline">
+                  {(["native", "1080p"] as const).map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      className={`pref-option pref-option-sm${settings.velocityResolution === r ? " is-active" : ""}`}
+                      onClick={() => update({ velocityResolution: r })}
+                    >
+                      {r === "native" ? "Natif" : "1080p"}
+                    </button>
+                  ))}
+                </div>
+              </Block>
+
+              <Row label="Audio système (Opus)">
+                <button
+                  type="button"
+                  className={`pref-toggle-pill${settings.velocityAudioEnabled ? " is-on" : ""}`}
+                  onClick={() => update({ velocityAudioEnabled: !settings.velocityAudioEnabled })}
+                  aria-pressed={settings.velocityAudioEnabled}
+                >
+                  <span className="pref-toggle-pill-knob" />
+                </button>
+              </Row>
+
+              <Row label="Tester Velocity" last>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {selfTest && (
+                    <span style={{ fontSize: "0.78rem", color: "#4caf7d" }}>
+                      {selfTest.fps.toFixed(0)} fps · {selfTest.bitrateMbps.toFixed(0)} Mbps · {selfTest.encoder}
+                    </span>
+                  )}
+                  {testError && (
+                    <span style={{ fontSize: "0.78rem", color: "#c4623e" }}>{testError}</span>
+                  )}
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={runVelocityTest}
+                    disabled={testing}
+                    style={{ minHeight: 32, padding: "0 14px", fontSize: "0.82rem" }}
+                  >
+                    {testing ? "Test…" : "Tester"}
+                  </button>
+                </div>
+              </Row>
+            </>
+          )}
         </Section>
 
         {/* ─── HÔTE · RECTO ──────────────────────────────────── */}
