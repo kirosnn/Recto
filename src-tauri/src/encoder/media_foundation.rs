@@ -26,7 +26,7 @@ use windows::Win32::Media::MediaFoundation::{
     MFVideoFormat_H264, MFVideoFormat_NV12, MF_EVENT_TYPE, MF_E_TRANSFORM_NEED_MORE_INPUT,
     MF_E_TRANSFORM_STREAM_CHANGE, MF_LOW_LATENCY, MF_MT_AVG_BITRATE, MF_MT_FRAME_RATE,
     MF_MT_FRAME_SIZE, MF_MT_INTERLACE_MODE, MF_MT_MAJOR_TYPE, MF_MT_MPEG2_PROFILE,
-    MF_MT_PIXEL_ASPECT_RATIO, MF_MT_SUBTYPE, MF_TRANSFORM_ASYNC_UNLOCK,
+    MF_MT_MPEG_SEQUENCE_HEADER, MF_MT_PIXEL_ASPECT_RATIO, MF_MT_SUBTYPE, MF_TRANSFORM_ASYNC_UNLOCK,
     MF_EVENT_FLAG_NO_WAIT, MF_E_NO_EVENTS_AVAILABLE,
     MFSTARTUP_FULL, MFVideoInterlace_Progressive, METransformHaveOutput,
     METransformNeedInput, eAVEncH264VProfile_High,
@@ -119,6 +119,23 @@ impl MediaFoundationEncoder {
         &self.config
     }
 
+    /// En-tête de séquence H264 (SPS + PPS) en Annex-B. Media Foundation le range
+    /// dans l'attribut MF_MT_MPEG_SEQUENCE_HEADER du type de sortie, PAS dans le
+    /// flux des frames — sans lui, aucun lecteur ne peut décoder. À écrire UNE fois
+    /// en tête du fichier (ou à renvoyer avant la 1re keyframe sur le réseau).
+    pub fn sequence_header(&self) -> Result<Vec<u8>> {
+        unsafe {
+            let out_type = self.transform.GetOutputCurrentType(0)?;
+            let size = match out_type.GetBlobSize(&MF_MT_MPEG_SEQUENCE_HEADER) {
+                Ok(s) if s > 0 => s,
+                _ => return Ok(Vec::new()),
+            };
+            let mut buf = vec![0u8; size as usize];
+            out_type.GetBlob(&MF_MT_MPEG_SEQUENCE_HEADER, &mut buf, None)?;
+            Ok(buf)
+        }
+    }
+
     /// Démarre le streaming la première fois.
     unsafe fn ensure_streaming(&mut self) -> Result<()> {
         if !self.streaming {
@@ -165,6 +182,10 @@ impl VideoEncoder for MediaFoundationEncoder {
 
     fn request_keyframe(&mut self) {
         self.force_keyframe = true;
+    }
+
+    fn sequence_header(&self) -> Result<Vec<u8>> {
+        MediaFoundationEncoder::sequence_header(self)
     }
 }
 
