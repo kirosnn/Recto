@@ -46,19 +46,18 @@ export default function SettingsPage() {
     router.refresh();
   };
 
-  // Note: user not fetched here for simplicity; add if needed. For now, no Compte section to match minimal web.
   const bitrateIdx = kbpsToStepIdx(settings.maxBitrateKbps);
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "clamp(56px,6vw,72px) clamp(16px,4vw,32px) 48px" }}>
+    <div className="site-shell">
       <button onClick={() => router.back()} className="back-btn" aria-label="Retour">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden>
           <path d="M13 4L7 10L13 16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
 
-      <div style={{ maxWidth: 540, margin: "0 auto" }}>
-        <h1 className="serif" style={{ fontSize: "clamp(1.8rem,3vw,2.4rem)", letterSpacing: "-0.04em", marginBottom: "clamp(28px,4vw,40px)" }}>
+      <div className="site-content">
+        <h1 className="site-page-title">
           Paramètres.
         </h1>
 
@@ -94,7 +93,7 @@ export default function SettingsPage() {
                       flex: "1 1 0",
                       minWidth: 100,
                       padding: "10px 12px",
-                      borderRadius: 12,
+                      borderRadius: 8,
                       border: active ? "1px solid transparent" : "1px solid var(--border-2)",
                       background: active
                         ? "linear-gradient(180deg,#505050 0%,#232323 45%,#161616 100%)"
@@ -120,7 +119,7 @@ export default function SettingsPage() {
                   flex: "1 1 0",
                   minWidth: 80,
                   padding: "10px 12px",
-                  borderRadius: 12,
+                  borderRadius: 8,
                   border: settings.preset === "custom" ? "1px solid transparent" : "1px solid var(--border-2)",
                   background: settings.preset === "custom"
                     ? "linear-gradient(180deg,#505050 0%,#232323 45%,#161616 100%)"
@@ -359,7 +358,7 @@ export default function SettingsPage() {
           </Block>
         </Section>
 
-        <p style={{ textAlign: "center", fontSize: "0.72rem", color: "var(--tx-3)", marginTop: 8 }}>
+        <p className="site-muted" style={{ textAlign: "center", fontSize: "0.72rem", marginTop: 8 }}>
           Recto · Web
         </p>
       </div>
@@ -376,14 +375,7 @@ function Section({ label, sub, children }: { label: string; sub?: string; childr
         </span>
         {sub && <p style={{ margin: "3px 0 0", fontSize: "0.78rem", color: "var(--tx-3)" }}>{sub}</p>}
       </div>
-      <div style={{
-        background: "var(--surface)",
-        border: "1px solid var(--border-2)",
-        borderRadius: 16,
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
-        overflow: "hidden",
-      }}>
+      <div className="site-card" style={{ overflow: "hidden" }}>
         {children}
       </div>
     </div>
