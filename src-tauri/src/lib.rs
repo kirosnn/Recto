@@ -51,8 +51,11 @@ async fn get_hw_encoder_caps() -> hw_encoder::HwEncoderCaps {
 }
 
 #[tauri::command]
-async fn get_auth_deep_links() -> Vec<String> {
-    auth_deep_links_from_args(std::env::args())
+async fn get_auth_deep_links(app: tauri::AppHandle) -> Vec<String> {
+    auth_deep_links_from_args(
+        std::env::args(),
+        auth_schemes_for_identifier(&app.config().identifier),
+    )
 }
 
 fn should_open_externally(url: &tauri::Url) -> bool {
@@ -62,7 +65,21 @@ fn should_open_externally(url: &tauri::Url) -> bool {
     )
 }
 
-fn auth_deep_links_from_args<I, S>(args: I) -> Vec<String>
+fn auth_schemes_for_identifier(identifier: &str) -> &'static [&'static str] {
+    match identifier {
+        "com.recto.dev.recto" => &["recto-dev-recto"],
+        "com.recto.dev.verso" => &["recto-dev-verso"],
+        _ => &["recto"],
+    }
+}
+
+fn is_auth_deep_link_for_schemes(value: &str, schemes: &[&str]) -> bool {
+    value
+        .split_once("://")
+        .is_some_and(|(scheme, _)| schemes.contains(&scheme))
+}
+
+fn auth_deep_links_from_args<I, S>(args: I, schemes: &[&str]) -> Vec<String>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
@@ -70,7 +87,7 @@ where
     args.into_iter()
         .filter_map(|arg| {
             let value = arg.as_ref();
-            if value.starts_with("recto://") {
+            if is_auth_deep_link_for_schemes(value, schemes) {
                 Some(value.to_string())
             } else {
                 None
@@ -97,7 +114,10 @@ pub fn run() {
         )
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            for url in auth_deep_links_from_args(args) {
+            for url in auth_deep_links_from_args(
+                args,
+                auth_schemes_for_identifier(&app.config().identifier),
+            ) {
                 let _ = app.emit("auth-deep-link", url);
             }
 
