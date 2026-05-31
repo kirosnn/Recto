@@ -32,9 +32,19 @@ windows = { version = "0.58", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_Graphics_Gdi",
     "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
     "Win32_System_Threading",
 ] }
 vigem-client = "0.1"
+
+# Probe phase 1 du pipeline natif : mesure le FPS réel de la capture DXGI
+# Desktop Duplication (vs ~20 fps de getDisplayMedia). Lancer avec :
+#   cargo run --example capture_probe --manifest-path src-tauri/Cargo.toml
+[[example]]
+name = "capture_probe"
+path = "examples/capture_probe.rs"
 
 [profile.release]
 opt-level = 3
