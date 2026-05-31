@@ -16,9 +16,18 @@ type TauriStore = {
 const storePath = "auth.json";
 let storePromise: Promise<TauriStore | null> | null = null;
 
+function getStorageKey(key: string) {
+  try {
+    if (window.location.port === "5173") return `dev-recto:${key}`;
+    if (window.location.port === "5174") return `dev-verso:${key}`;
+  } catch {}
+
+  return key;
+}
+
 function getLocalItem(key: string) {
   try {
-    return window.localStorage.getItem(key);
+    return window.localStorage.getItem(getStorageKey(key));
   } catch {
     return null;
   }
@@ -26,13 +35,13 @@ function getLocalItem(key: string) {
 
 function setLocalItem(key: string, value: string) {
   try {
-    window.localStorage.setItem(key, value);
+    window.localStorage.setItem(getStorageKey(key), value);
   } catch {}
 }
 
 function removeLocalItem(key: string) {
   try {
-    window.localStorage.removeItem(key);
+    window.localStorage.removeItem(getStorageKey(key));
   } catch {}
 }
 
@@ -56,15 +65,12 @@ function getStore() {
 
 export const authStorage: AuthStorage = {
   async getItem(key) {
-    // 1. Try browser localStorage first — fast, naturally maintained by the webview
     const local = getLocalItem(key);
     if (local !== null) return local;
 
-    // 2. Fall back to Tauri persistent store (survives localStorage clears)
     const store = await getStore();
-    const value = await store?.get<unknown>(key);
+    const value = await store?.get<unknown>(getStorageKey(key));
     if (typeof value === "string") {
-      // Restore to localStorage so future reads are instant
       setLocalItem(key, value);
       return value;
     }
@@ -72,19 +78,17 @@ export const authStorage: AuthStorage = {
     return null;
   },
   async setItem(key, value) {
-    // Write to localStorage immediately (synchronous, used on next read)
     setLocalItem(key, value);
-    // Persist to Tauri store as durable backup
     const store = await getStore();
     if (!store) return;
-    await store.set(key, value);
+    await store.set(getStorageKey(key), value);
     await store.save();
   },
   async removeItem(key) {
     removeLocalItem(key);
     const store = await getStore();
     if (!store) return;
-    await store.delete(key);
+    await store.delete(getStorageKey(key));
     await store.save();
   },
 };
