@@ -5,6 +5,7 @@ mod gamepad;
 mod hw_encoder;
 mod input;
 mod velocity;
+mod velocity_transport;
 
 use tauri::{Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -62,6 +63,29 @@ async fn velocity_caps() -> velocity::VelocityCaps {
 #[tauri::command]
 async fn velocity_selftest() -> Result<velocity::VelocitySelfTest, String> {
     velocity::selftest().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn velocity_start(
+    settings: velocity_transport::VelocityStartSettings,
+) -> Result<velocity_transport::VelocityStartResult, String> {
+    velocity_transport::start(settings)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn velocity_accept_answer(
+    answer: webrtc::peer_connection::sdp::session_description::RTCSessionDescription,
+) -> Result<(), String> {
+    velocity_transport::accept_answer(answer)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn velocity_stop() -> Result<(), String> {
+    velocity_transport::stop().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -163,6 +187,9 @@ pub fn run() {
             get_hw_encoder_caps,
             velocity_caps,
             velocity_selftest,
+            velocity_start,
+            velocity_accept_answer,
+            velocity_stop,
             set_window_title,
             minimize_window,
             maximize_window,
