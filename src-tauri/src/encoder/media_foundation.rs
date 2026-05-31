@@ -27,6 +27,7 @@ use windows::Win32::Media::MediaFoundation::{
     MF_E_TRANSFORM_STREAM_CHANGE, MF_LOW_LATENCY, MF_MT_AVG_BITRATE, MF_MT_FRAME_RATE,
     MF_MT_FRAME_SIZE, MF_MT_INTERLACE_MODE, MF_MT_MAJOR_TYPE, MF_MT_MPEG2_PROFILE,
     MF_MT_PIXEL_ASPECT_RATIO, MF_MT_SUBTYPE, MF_TRANSFORM_ASYNC_UNLOCK,
+    MF_EVENT_FLAG_NO_WAIT, MF_E_NO_EVENTS_AVAILABLE,
     MFSTARTUP_FULL, MFVideoInterlace_Progressive, METransformHaveOutput,
     METransformNeedInput, eAVEncH264VProfile_High,
 };
@@ -47,6 +48,10 @@ pub struct MediaFoundationEncoder {
     _device_manager: IMFDXGIDeviceManager,
     force_keyframe: bool,
     streaming: bool,
+    /// Frame convertie en attente d'être poussée (sur événement NeedInput).
+    pending_input: Option<IMFSample>,
+    /// NAL H264 produits, vidés par drain().
+    output_packets: Vec<EncodedPacket>,
 }
 
 impl MediaFoundationEncoder {
@@ -98,6 +103,8 @@ impl MediaFoundationEncoder {
                 _device_manager: device_manager,
                 force_keyframe: false,
                 streaming: false,
+                pending_input: None,
+                output_packets: Vec::new(),
             })
         }
     }
@@ -130,10 +137,9 @@ impl VideoEncoder for MediaFoundationEncoder {
         unsafe {
             self.ensure_streaming()?;
 
-            // Convertit BGRA → NV12 sur GPU.
+            // Convertit BGRA → NV12 sur GPU, puis enveloppe la texture dans un
+            // IMFSample (zéro-copie, surface DXGI).
             let nv12 = self.converter.convert(texture)?;
-
-            // Enveloppe la texture NV12 dans un IMFSample (zéro-copie, surface DXGI).
             let buffer = MFCreateDXGISurfaceBuffer(&ID3D11Texture2D::IID, nv12, 0, false)?;
             let sample: IMFSample = MFCreateSample()?;
             sample.AddBuffer(&buffer)?;
@@ -141,68 +147,86 @@ impl VideoEncoder for MediaFoundationEncoder {
             let frame_duration = 10_000_000i64 / self.config.framerate.max(1) as i64;
             sample.SetSampleDuration(frame_duration)?;
 
-            // MFT async : attend l'event METransformNeedInput avant ProcessInput.
-            let evt = self.event_gen.GetEvent(Default::default())?;
-            let evt_type = MF_EVENT_TYPE(evt.GetType()? as i32);
-            if evt_type == METransformNeedInput {
-                self.transform.ProcessInput(0, &sample, 0)?;
-            } else if evt_type == METransformHaveOutput {
-                // L'encodeur a déjà une sortie en attente : on la laissera à drain().
-                // On repousse quand même l'entrée pour ne pas la perdre.
-                self.transform.ProcessInput(0, &sample, 0)?;
-            }
-
+            // Mémorise la frame ; elle sera poussée quand le MFT réclame une entrée
+            // (événement METransformNeedInput). On ne PEUT PAS appeler ProcessInput
+            // / ProcessOutput hors du flux d'événements d'un MFT async (sinon
+            // E_UNEXPECTED 0x8000FFFF).
+            self.pending_input = Some(sample);
+            self.pump_events()?;
             Ok(())
         }
     }
 
     fn drain(&mut self) -> Result<Vec<EncodedPacket>> {
-        unsafe {
-            let mut packets = Vec::new();
-
-            // Récupère toutes les sorties disponibles sans bloquer. ProcessOutput
-            // renvoie NEED_MORE_INPUT quand il n'y a plus rien à drainer.
-            loop {
-                let sample: IMFSample = MFCreateSample()?;
-                // Pour un MFT HW H264, le MFT alloue souvent lui-même le buffer de
-                // sortie (MFT_OUTPUT_STREAM_PROVIDES_SAMPLES). On fournit un sample
-                // vide ; s'il fournit le sien, le nôtre est ignoré.
-                let mut out_buffers = [MFT_OUTPUT_DATA_BUFFER {
-                    dwStreamID: 0,
-                    pSample: std::mem::ManuallyDrop::new(Some(sample)),
-                    dwStatus: 0,
-                    pEvents: std::mem::ManuallyDrop::new(None),
-                }];
-                let mut status = 0u32;
-
-                match self
-                    .transform
-                    .ProcessOutput(0, &mut out_buffers, &mut status)
-                {
-                    Ok(()) => {
-                        let out_sample =
-                            std::mem::ManuallyDrop::take(&mut out_buffers[0].pSample);
-                        if let Some(out_sample) = out_sample {
-                            if let Some(pkt) = read_sample(&out_sample)? {
-                                packets.push(pkt);
-                            }
-                        }
-                    }
-                    Err(e) if e.code() == MF_E_TRANSFORM_NEED_MORE_INPUT => break,
-                    Err(e) if e.code() == MF_E_TRANSFORM_STREAM_CHANGE => {
-                        // Renégociation du type de sortie ; on le re-set et on continue.
-                        set_output_type(&self.transform, &self.config)?;
-                    }
-                    Err(e) => return Err(anyhow!("ProcessOutput: {e}")),
-                }
-            }
-
-            Ok(packets)
-        }
+        // Les paquets sont produits dans pump_events() (piloté par événements) ;
+        // ici on ne fait que vider la file accumulée.
+        Ok(std::mem::take(&mut self.output_packets))
     }
 
     fn request_keyframe(&mut self) {
         self.force_keyframe = true;
+    }
+}
+
+impl MediaFoundationEncoder {
+    /// Pompe les événements du MFT async tant qu'il y en a (mode NO_WAIT) et
+    /// agit selon leur type :
+    ///   - METransformNeedInput  → pousse la frame en attente (ProcessInput)
+    ///   - METransformHaveOutput → récupère un NAL H264 (ProcessOutput)
+    /// C'est le contrat obligatoire des Hardware MFT (asynchrones).
+    unsafe fn pump_events(&mut self) -> Result<()> {
+        loop {
+            // NO_WAIT : ne bloque pas ; renvoie MF_E_NO_EVENTS_AVAILABLE si vide.
+            let evt = match self.event_gen.GetEvent(MF_EVENT_FLAG_NO_WAIT) {
+                Ok(e) => e,
+                Err(e) if e.code() == MF_E_NO_EVENTS_AVAILABLE => break,
+                Err(e) => return Err(anyhow!("GetEvent: {e}")),
+            };
+            let evt_type = MF_EVENT_TYPE(evt.GetType()? as i32);
+
+            if evt_type == METransformNeedInput {
+                if let Some(sample) = self.pending_input.take() {
+                    self.transform.ProcessInput(0, &sample, 0)?;
+                }
+                // Sinon : pas de frame prête, on ignore (le MFT redemandera).
+            } else if evt_type == METransformHaveOutput {
+                self.pull_output()?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Récupère une frame encodée du MFT (sur événement HaveOutput) et l'ajoute à
+    /// la file de sortie.
+    unsafe fn pull_output(&mut self) -> Result<()> {
+        // Les MFT H264 HW fournissent eux-mêmes le sample de sortie
+        // (MFT_OUTPUT_STREAM_PROVIDES_SAMPLES) : on passe un pSample nul.
+        let mut out_buffers = [MFT_OUTPUT_DATA_BUFFER {
+            dwStreamID: 0,
+            pSample: std::mem::ManuallyDrop::new(None),
+            dwStatus: 0,
+            pEvents: std::mem::ManuallyDrop::new(None),
+        }];
+        let mut status = 0u32;
+
+        match self.transform.ProcessOutput(0, &mut out_buffers, &mut status) {
+            Ok(()) => {
+                let out_sample = std::mem::ManuallyDrop::take(&mut out_buffers[0].pSample);
+                if let Some(out_sample) = out_sample {
+                    if let Some(pkt) = read_sample(&out_sample)? {
+                        self.output_packets.push(pkt);
+                    }
+                }
+                Ok(())
+            }
+            Err(e) if e.code() == MF_E_TRANSFORM_NEED_MORE_INPUT => Ok(()),
+            Err(e) if e.code() == MF_E_TRANSFORM_STREAM_CHANGE => {
+                // Le MFT renégocie son type de sortie : on le re-applique.
+                set_output_type(&self.transform, &self.config)?;
+                Ok(())
+            }
+            Err(e) => Err(anyhow!("ProcessOutput: {e}")),
+        }
     }
 }
 
