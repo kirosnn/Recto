@@ -4,7 +4,27 @@ import { useRectoSession } from "../context/RectoSessionContext";
 import PreferencesDrawer from "../components/PreferencesDrawer";
 import PeerBadge from "../components/PeerBadge";
 import BackButton from "../components/BackButton";
-import type { VideoStats } from "../components/VideoDisplay";
+
+// Sender-side stats for the host overlay. Recto only ever produces outbound-rtp
+// (it's the one encoding & sending), so the key signals are about the ENCODER:
+// which codec, hardware vs software, and whether it can keep up (fps / qLimit).
+interface SenderStats {
+  codec: string;
+  encoder: string;     // encoderImplementation, e.g. "NVENC"/"libaom" (SW)
+  hardware: boolean;   // true if the encoder is GPU-accelerated
+  width: number;
+  height: number;
+  captureFps: number;  // media-source rate = what getDisplayMedia delivers
+  fps: number;         // outbound-rtp rate = what the encoder actually sends
+  bitrateKbps: number;
+  rtt: number;
+  qualityLimit: string; // "none" | "cpu" | "bandwidth" | ...
+}
+
+const EMPTY_STATS: SenderStats = {
+  codec: "—", encoder: "—", hardware: false, width: 0, height: 0,
+  captureFps: 0, fps: 0, bitrateKbps: 0, rtt: 0, qualityLimit: "—",
+};
 
 export default function RectoPage() {
   const { status, code, duration, error, copied, peer, lastInputRef, start, stop, copyCode, getStats } = useRectoSession();
@@ -16,8 +36,8 @@ export default function RectoPage() {
   const [dbg, setDbg] = useState({ summary: "", count: 0 });
 
   const [showStats, setShowStats] = useState(false);
-  const [videoStats, setVideoStats] = useState<VideoStats>({ bitrateKbps: 0, packetsLost: 0, packetsReceived: 0, rtt: 0 });
-  const prevSnapRef = useRef<any>(null);
+  const [videoStats, setVideoStats] = useState<SenderStats>(EMPTY_STATS);
+  const prevSnapRef = useRef<{ bytes: number; frames: number; ts: number } | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -44,25 +64,60 @@ export default function RectoPage() {
     if (!showStats || !getStats) return;
     const id = setInterval(async () => {
       const report = await getStats();
-      let inbound: any = null;
-      report.forEach((s: any) => { if (s.type === "inbound-rtp" && s.kind === "video") inbound = s; });
-      if (inbound) {
-        const bytes = (inbound.bytesReceived as number) ?? 0;
-        const prev = prevSnapRef.current;
-        const now = Date.now();
-        let bitrateKbps = 0;
-        if (prev) {
-          const dt = (now - prev.ts) / 1000;
-          if (dt > 0) bitrateKbps = Math.round(((bytes - prev.bytes) * 8) / 1000 / dt);
-        }
-        prevSnapRef.current = { bytes, ts: now };
-        setVideoStats({
-          bitrateKbps,
-          packetsLost: (inbound.packetsLost as number) ?? 0,
-          packetsReceived: (inbound.packetsReceived as number) ?? 0,
-          rtt: 0,
-        });
+      // Recto is the SENDER → read outbound-rtp (not inbound, which is always
+      // empty here and is why this overlay used to show nothing but zeros).
+      let outbound: any = null;
+      let pair: any = null;
+      let source: any = null;
+      report.forEach((s: any) => {
+        if (s.type === "outbound-rtp" && s.kind === "video") outbound = s;
+        else if (s.type === "candidate-pair" && (s.nominated || s.selected)) pair = s;
+        // media-source = the capture track itself, *before* encoding. Its
+        // framesPerSecond is the rate getDisplayMedia (WebView2) actually
+        // delivers — the decisive number vs the encoded outbound fps.
+        else if (s.type === "media-source" && s.kind === "video") source = s;
+      });
+      if (!outbound) return;
+
+      let codec = "—";
+      if (outbound.codecId) {
+        const c = report.get(outbound.codecId) as any;
+        if (c?.mimeType) codec = (c.mimeType as string).replace("video/", "");
       }
+
+      const bytes = (outbound.bytesSent as number) ?? 0;
+      const frames = (outbound.framesEncoded as number) ?? 0;
+      const now = Date.now();
+      const prev = prevSnapRef.current;
+      let bitrateKbps = 0;
+      let fps = 0;
+      if (prev) {
+        const dt = (now - prev.ts) / 1000;
+        if (dt > 0) {
+          bitrateKbps = Math.round(((bytes - prev.bytes) * 8) / 1000 / dt);
+          fps = Math.round((frames - prev.frames) / dt);
+        }
+      }
+      prevSnapRef.current = { bytes, frames, ts: now };
+
+      // A hardware encoder reports a vendor name (e.g. "NVIDIA H.264 ...",
+      // "QuickSync", "AMF"); software fallbacks report "libaom"/"libvpx"/
+      // "OpenH264"/"SimulcastEncoderAdapter". Flag the software ones explicitly.
+      const enc = (outbound.encoderImplementation as string) ?? "—";
+      const isSoftware = /libaom|libvpx|openh264|software|fallback/i.test(enc) || enc === "ExternalEncoder";
+
+      setVideoStats({
+        codec,
+        encoder: enc,
+        hardware: enc !== "—" && !isSoftware,
+        width: (outbound.frameWidth as number) ?? 0,
+        height: (outbound.frameHeight as number) ?? 0,
+        captureFps: source ? Math.round((source.framesPerSecond as number) ?? 0) : 0,
+        fps,
+        bitrateKbps,
+        rtt: pair ? Math.round(((pair.currentRoundTripTime as number) ?? 0) * 1000) : 0,
+        qualityLimit: (outbound.qualityLimitationReason as string) ?? "—",
+      });
     }, 500);
     return () => clearInterval(id);
   }, [showStats, getStats]);
@@ -83,11 +138,22 @@ export default function RectoPage() {
       />
 
       {showStats && status === "connected" && (
-        <div style={{ position: "fixed", top: 12, right: 12, zIndex: 9999, padding: "10px 14px", borderRadius: 10, background: "rgba(0,0,0,0.82)", color: "#fff", border: "1px solid rgba(255,255,255,0.15)", fontSize: "0.78rem", lineHeight: 1.5, pointerEvents: "none", boxShadow: "0 4px 14px rgba(0,0,0,0.4)", minWidth: 180 }}>
-          <div style={{ color: "rgba(255,255,255,0.55)", fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Stats réseau · Ctrl+Alt+S</div>
+        <div style={{ position: "fixed", top: 12, right: 12, zIndex: 9999, padding: "10px 14px", borderRadius: 10, background: "rgba(0,0,0,0.82)", color: "#fff", border: "1px solid rgba(255,255,255,0.15)", fontSize: "0.78rem", lineHeight: 1.6, pointerEvents: "none", boxShadow: "0 4px 14px rgba(0,0,0,0.4)", minWidth: 210, fontFamily: "monospace" }}>
+          <div style={{ color: "rgba(255,255,255,0.55)", fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Stats encodeur · Ctrl+Alt+S</div>
+          <div>Codec: <span style={{ color: "#7dd3fc" }}>{videoStats.codec}</span></div>
+          <div>
+            Encodeur:{" "}
+            <span style={{ color: videoStats.hardware ? "#4ade80" : "#f87171", fontWeight: 600 }}>
+              {videoStats.hardware ? "Matériel ✓" : "Logiciel ✗"}
+            </span>
+          </div>
+          <div style={{ color: "rgba(255,255,255,0.45)", fontSize: "0.66rem", marginTop: -2, marginBottom: 2 }}>{videoStats.encoder}</div>
+          <div>Résolution: {videoStats.width}×{videoStats.height}</div>
+          <div>Capture FPS: <span style={{ color: videoStats.captureFps < 45 ? "#fbbf24" : "#4ade80" }}>{videoStats.captureFps}</span></div>
+          <div>Encodé FPS: <span style={{ color: videoStats.fps < 24 ? "#f87171" : "inherit" }}>{videoStats.fps}</span></div>
           <div>Bitrate: {videoStats.bitrateKbps >= 1000 ? `${(videoStats.bitrateKbps / 1000).toFixed(1)} Mbps` : `${videoStats.bitrateKbps} Kbps`}</div>
           <div>RTT: {videoStats.rtt} ms</div>
-          <div>Paquets perdus: {videoStats.packetsLost}</div>
+          <div>Limite: <span style={{ color: videoStats.qualityLimit !== "none" && videoStats.qualityLimit !== "—" ? "#fbbf24" : "inherit" }}>{videoStats.qualityLimit}</span></div>
         </div>
       )}
 
