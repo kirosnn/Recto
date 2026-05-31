@@ -25,9 +25,17 @@ fn main() {
 
     let (w, h) = dup.dimensions();
     println!("[capture_probe] sortie 0 : {w}x{h}, format={:?}", dup.format());
-    println!("[capture_probe] mesure sur 5 s — bouge une vidéo plein écran maintenant…\n");
 
-    let probe_duration = Duration::from_secs(5);
+    // Petit délai pour basculer sur la vidéo / la fenêtre à tester avant la mesure.
+    let warmup = Duration::from_secs(3);
+    println!("[capture_probe] départ dans {} s — mets une vidéo plein écran en mouvement…", warmup.as_secs());
+    std::thread::sleep(warmup);
+    // On vide la frame en attente accumulée pendant le warmup pour ne pas fausser
+    // la 1re seconde de mesure.
+    let _ = dup.acquire(0);
+
+    let probe_duration = Duration::from_secs(30);
+    println!("[capture_probe] mesure sur {} s — GO !\n", probe_duration.as_secs());
     let start = Instant::now();
     let mut acquired = 0u64;     // frames réellement nouvelles (contenu changé)
     let mut timeouts = 0u64;     // écran figé (aucune nouvelle frame)
