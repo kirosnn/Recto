@@ -12,8 +12,6 @@ import {
 
 export interface WebClientSettings {
   qualityTuningVersion: number;
-  // Engine selector. On the web, Velocity (native) is never usable — the field
-  // exists for parity and to display the disabled choice, but stays "browser".
   engine: StreamEngine;
   preset: QualityPreset;
   maxBitrateKbps: number | null;
@@ -85,7 +83,6 @@ function load(): WebClientSettings {
       migrated.qualityTuningVersion = 3;
     }
 
-    // v4: engine selector (web always stays browser).
     if ((stored.qualityTuningVersion ?? 0) < 4) {
       migrated.engine = "browser";
       migrated.qualityTuningVersion = 4;
