@@ -12,29 +12,39 @@
 #![cfg(windows)]
 
 use anyhow::{anyhow, Result};
+use std::collections::VecDeque;
+use std::time::Instant;
 use windows::core::{Interface, PWSTR};
 use windows::Win32::Graphics::Direct3D11::{ID3D11Device, ID3D11Texture2D};
 use windows::Win32::Media::MediaFoundation::{
-    IMFActivate, IMFDXGIDeviceManager, IMFMediaEventGenerator, IMFMediaType, IMFSample,
-    IMFTransform, MFCreateDXGISurfaceBuffer, MFCreateDXGIDeviceManager, MFCreateMediaType,
-    MFCreateSample, MFMediaType_Video, MFStartup, MFTEnumEx, MFShutdown,
-    MFT_CATEGORY_VIDEO_ENCODER, MFT_ENUM_FLAG_HARDWARE, MFT_ENUM_FLAG_SORTANDFILTER,
-    MFT_FRIENDLY_NAME_Attribute, MFT_MESSAGE_COMMAND_FLUSH, MFT_MESSAGE_NOTIFY_BEGIN_STREAMING,
-    MFT_MESSAGE_NOTIFY_END_OF_STREAM, MFT_MESSAGE_NOTIFY_END_STREAMING,
-    MFT_MESSAGE_NOTIFY_START_OF_STREAM, MFT_MESSAGE_SET_D3D_MANAGER,
-    MFT_OUTPUT_DATA_BUFFER, MFT_REGISTER_TYPE_INFO,
-    MFVideoFormat_H264, MFVideoFormat_NV12, MF_EVENT_TYPE, MF_E_TRANSFORM_NEED_MORE_INPUT,
+    eAVEncCommonRateControlMode_CBR, eAVEncH264VProfile_Main, CODECAPI_AVEncCommonAllowFrameDrops,
+    CODECAPI_AVEncCommonLowLatency, CODECAPI_AVEncCommonMaxBitRate,
+    CODECAPI_AVEncCommonMeanBitRate, CODECAPI_AVEncCommonQualityVsSpeed,
+    CODECAPI_AVEncCommonRateControlMode, CODECAPI_AVEncCommonRealTime,
+    CODECAPI_AVEncMPVDefaultBPictureCount, CODECAPI_AVEncMPVGOPSize, ICodecAPI, IMFActivate,
+    IMFDXGIDeviceManager, IMFMediaEventGenerator, IMFMediaType, IMFSample, IMFTransform,
+    METransformHaveOutput, METransformNeedInput, MFCreateDXGIDeviceManager,
+    MFCreateDXGISurfaceBuffer, MFCreateMediaType, MFCreateSample, MFMediaType_Video, MFShutdown,
+    MFStartup, MFTEnumEx, MFT_FRIENDLY_NAME_Attribute, MFVideoFormat_H264, MFVideoFormat_NV12,
+    MFVideoInterlace_Progressive, MFSTARTUP_FULL, MFT_CATEGORY_VIDEO_ENCODER,
+    MFT_ENUM_FLAG_HARDWARE, MFT_ENUM_FLAG_SORTANDFILTER, MFT_MESSAGE_COMMAND_FLUSH,
+    MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, MFT_MESSAGE_NOTIFY_END_OF_STREAM,
+    MFT_MESSAGE_NOTIFY_END_STREAMING, MFT_MESSAGE_NOTIFY_START_OF_STREAM,
+    MFT_MESSAGE_SET_D3D_MANAGER, MFT_OUTPUT_DATA_BUFFER, MFT_REGISTER_TYPE_INFO,
+    MF_EVENT_FLAG_NO_WAIT, MF_EVENT_TYPE, MF_E_NO_EVENTS_AVAILABLE, MF_E_TRANSFORM_NEED_MORE_INPUT,
     MF_E_TRANSFORM_STREAM_CHANGE, MF_LOW_LATENCY, MF_MT_AVG_BITRATE, MF_MT_FRAME_RATE,
     MF_MT_FRAME_SIZE, MF_MT_INTERLACE_MODE, MF_MT_MAJOR_TYPE, MF_MT_MPEG2_PROFILE,
     MF_MT_MPEG_SEQUENCE_HEADER, MF_MT_PIXEL_ASPECT_RATIO, MF_MT_SUBTYPE, MF_TRANSFORM_ASYNC_UNLOCK,
-    MF_EVENT_FLAG_NO_WAIT, MF_E_NO_EVENTS_AVAILABLE,
-    MFSTARTUP_FULL, MFVideoInterlace_Progressive, METransformHaveOutput,
-    METransformNeedInput, eAVEncH264VProfile_High,
 };
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
 
 use super::color_convert::ColorConverter;
-use super::{EncodedPacket, EncoderConfig, Vendor, VideoEncoder};
+use super::{EncodedPacket, EncoderConfig, EncoderDiagnostics, Vendor, VideoEncoder};
+
+struct PendingInput {
+    sample: IMFSample,
+    surface_index: usize,
+}
 
 /// Encodeur H264 matériel piloté via Media Foundation.
 pub struct MediaFoundationEncoder {
@@ -48,15 +58,14 @@ pub struct MediaFoundationEncoder {
     _device_manager: IMFDXGIDeviceManager,
     force_keyframe: bool,
     streaming: bool,
-    /// Frame convertie en attente d'être poussée (sur événement NeedInput).
-    /// NOTE: un seul slot — pas une file. Le sample enveloppe la texture NV12
-    /// INTERNE du convertisseur, qui est écrasée à chaque convert(). Bufferiser
-    /// plusieurs samples ferait pointer plusieurs entrées vers la même mémoire
-    /// déjà réécrite → corruption. Pour un vrai pipeline 60 fps sans perte, il
-    /// faudra un POOL de textures NV12 (une par frame en vol) — étape dédiée.
-    pending_input: Option<IMFSample>,
+    pending_inputs: VecDeque<PendingInput>,
+    free_surfaces: VecDeque<usize>,
+    inflight_surfaces: VecDeque<usize>,
     /// NAL H264 produits, vidés par drain().
     output_packets: Vec<EncodedPacket>,
+    input_requested: bool,
+    dropped_frames: u64,
+    diagnostics: EncoderDiagnostics,
 }
 
 impl MediaFoundationEncoder {
@@ -72,8 +81,7 @@ impl MediaFoundationEncoder {
             let mut reset_token = 0u32;
             let mut device_manager: Option<IMFDXGIDeviceManager> = None;
             MFCreateDXGIDeviceManager(&mut reset_token, &mut device_manager)?;
-            let device_manager =
-                device_manager.ok_or_else(|| anyhow!("DXGIDeviceManager nul"))?;
+            let device_manager = device_manager.ok_or_else(|| anyhow!("DXGIDeviceManager nul"))?;
             device_manager.ResetDevice(device, reset_token)?;
 
             // 2. Débloque le mode asynchrone (obligatoire pour les MFT HW).
@@ -92,11 +100,16 @@ impl MediaFoundationEncoder {
             set_output_type(&transform, &config)?;
             set_input_type(&transform, &config)?;
 
+            // 4b. Réglages QUALITÉ via ICodecAPI (best-effort : tout l'encodeur ne
+            //     supporte pas tous les paramètres, on ignore les échecs).
+            apply_quality_settings(&transform, &config);
+
             // 5. Récupère le générateur d'événements (flux async).
             let event_gen: IMFMediaEventGenerator = transform.cast()?;
 
             // 6. Convertisseur couleur BGRA→NV12 (même device).
             let converter = ColorConverter::new(device, config.width, config.height)?;
+            let free_surfaces = (0..converter.surface_count()).collect();
 
             Ok(Self {
                 vendor,
@@ -108,8 +121,13 @@ impl MediaFoundationEncoder {
                 _device_manager: device_manager,
                 force_keyframe: false,
                 streaming: false,
-                pending_input: None,
+                pending_inputs: VecDeque::new(),
+                free_surfaces,
+                inflight_surfaces: VecDeque::new(),
                 output_packets: Vec::new(),
+                input_requested: false,
+                dropped_frames: 0,
+                diagnostics: EncoderDiagnostics::default(),
             })
         }
     }
@@ -158,10 +176,16 @@ impl VideoEncoder for MediaFoundationEncoder {
     fn encode(&mut self, texture: &ID3D11Texture2D, timestamp_100ns: i64) -> Result<()> {
         unsafe {
             self.ensure_streaming()?;
+            self.pump_events()?;
 
-            // Convertit BGRA → NV12 sur GPU, puis enveloppe la texture dans un
-            // IMFSample (zéro-copie, surface DXGI).
-            let nv12 = self.converter.convert(texture)?;
+            let Some(surface_index) = self.free_surfaces.pop_front() else {
+                self.dropped_frames += 1;
+                return Ok(());
+            };
+
+            let convert_start = Instant::now();
+            let nv12 = self.converter.convert_into(texture, surface_index)?;
+            self.diagnostics.convert_ms += convert_start.elapsed().as_secs_f64() * 1000.0;
             let buffer = MFCreateDXGISurfaceBuffer(&ID3D11Texture2D::IID, nv12, 0, false)?;
             let sample: IMFSample = MFCreateSample()?;
             sample.AddBuffer(&buffer)?;
@@ -169,20 +193,27 @@ impl VideoEncoder for MediaFoundationEncoder {
             let frame_duration = 10_000_000i64 / self.config.framerate.max(1) as i64;
             sample.SetSampleDuration(frame_duration)?;
 
-            // Mémorise la frame ; elle sera poussée quand le MFT réclame une entrée
-            // (événement METransformNeedInput). On ne PEUT PAS appeler ProcessInput
-            // / ProcessOutput hors du flux d'événements d'un MFT async (sinon
-            // E_UNEXPECTED 0x8000FFFF). On pompe immédiatement pour pousser sans
-            // attendre la frame suivante.
-            self.pending_input = Some(sample);
+            if self.input_requested {
+                let input_start = Instant::now();
+                self.transform.ProcessInput(0, &sample, 0)?;
+                self.diagnostics.process_input_ms += input_start.elapsed().as_secs_f64() * 1000.0;
+                self.input_requested = false;
+                self.inflight_surfaces.push_back(surface_index);
+            } else {
+                self.pending_inputs.push_back(PendingInput {
+                    sample,
+                    surface_index,
+                });
+            }
             self.pump_events()?;
             Ok(())
         }
     }
 
     fn drain(&mut self) -> Result<Vec<EncodedPacket>> {
-        // Les paquets sont produits dans pump_events() (piloté par événements) ;
-        // ici on ne fait que vider la file accumulée.
+        unsafe {
+            self.pump_events()?;
+        }
         Ok(std::mem::take(&mut self.output_packets))
     }
 
@@ -193,6 +224,14 @@ impl VideoEncoder for MediaFoundationEncoder {
     fn sequence_header(&self) -> Result<Vec<u8>> {
         MediaFoundationEncoder::sequence_header(self)
     }
+
+    fn dropped_frames(&self) -> u64 {
+        self.dropped_frames
+    }
+
+    fn diagnostics(&self) -> EncoderDiagnostics {
+        self.diagnostics
+    }
 }
 
 impl MediaFoundationEncoder {
@@ -202,22 +241,32 @@ impl MediaFoundationEncoder {
     ///   - METransformHaveOutput → récupère un NAL H264 (ProcessOutput)
     /// C'est le contrat obligatoire des Hardware MFT (asynchrones).
     unsafe fn pump_events(&mut self) -> Result<()> {
+        let pump_start = Instant::now();
         loop {
             // NO_WAIT : ne bloque pas ; renvoie MF_E_NO_EVENTS_AVAILABLE si vide.
             let evt = match self.event_gen.GetEvent(MF_EVENT_FLAG_NO_WAIT) {
                 Ok(e) => e,
-                Err(e) if e.code() == MF_E_NO_EVENTS_AVAILABLE => break,
+                Err(e) if e.code() == MF_E_NO_EVENTS_AVAILABLE => {
+                    self.diagnostics.pump_ms += pump_start.elapsed().as_secs_f64() * 1000.0;
+                    break;
+                }
                 Err(e) => return Err(anyhow!("GetEvent: {e}")),
             };
             let evt_type = MF_EVENT_TYPE(evt.GetType()? as i32);
 
             if evt_type == METransformNeedInput {
-                if let Some(sample) = self.pending_input.take() {
-                    self.transform.ProcessInput(0, &sample, 0)?;
+                if let Some(pending) = self.pending_inputs.pop_front() {
+                    let input_start = Instant::now();
+                    self.transform.ProcessInput(0, &pending.sample, 0)?;
+                    self.diagnostics.process_input_ms +=
+                        input_start.elapsed().as_secs_f64() * 1000.0;
+                    self.input_requested = false;
+                    self.inflight_surfaces.push_back(pending.surface_index);
+                } else {
+                    self.input_requested = true;
                 }
-                // Sinon : pas de frame prête, on ignore (le MFT redemandera).
             } else if evt_type == METransformHaveOutput {
-                self.pull_output()?;
+                let _ = self.pull_output()?;
             }
         }
         Ok(())
@@ -225,7 +274,7 @@ impl MediaFoundationEncoder {
 
     /// Récupère une frame encodée du MFT (sur événement HaveOutput) et l'ajoute à
     /// la file de sortie.
-    unsafe fn pull_output(&mut self) -> Result<()> {
+    unsafe fn pull_output(&mut self) -> Result<bool> {
         // Les MFT H264 HW fournissent eux-mêmes le sample de sortie
         // (MFT_OUTPUT_STREAM_PROVIDES_SAMPLES) : on passe un pSample nul.
         let mut out_buffers = [MFT_OUTPUT_DATA_BUFFER {
@@ -236,7 +285,10 @@ impl MediaFoundationEncoder {
         }];
         let mut status = 0u32;
 
-        match self.transform.ProcessOutput(0, &mut out_buffers, &mut status) {
+        match self
+            .transform
+            .ProcessOutput(0, &mut out_buffers, &mut status)
+        {
             Ok(()) => {
                 let out_sample = std::mem::ManuallyDrop::take(&mut out_buffers[0].pSample);
                 if let Some(out_sample) = out_sample {
@@ -244,13 +296,16 @@ impl MediaFoundationEncoder {
                         self.output_packets.push(pkt);
                     }
                 }
-                Ok(())
+                if let Some(surface_index) = self.inflight_surfaces.pop_front() {
+                    self.free_surfaces.push_back(surface_index);
+                }
+                Ok(true)
             }
-            Err(e) if e.code() == MF_E_TRANSFORM_NEED_MORE_INPUT => Ok(()),
+            Err(e) if e.code() == MF_E_TRANSFORM_NEED_MORE_INPUT => Ok(false),
             Err(e) if e.code() == MF_E_TRANSFORM_STREAM_CHANGE => {
                 // Le MFT renégocie son type de sortie : on le re-applique.
                 set_output_type(&self.transform, &self.config)?;
-                Ok(())
+                Ok(false)
             }
             Err(e) => Err(anyhow!("ProcessOutput: {e}")),
         }
@@ -322,6 +377,60 @@ fn contains_idr(data: &[u8]) -> bool {
     false
 }
 
+/// Règle les paramètres de QUALITÉ de l'encodeur via ICodecAPI. Best-effort :
+/// chaque `SetValue` peut échouer si le MFT ne supporte pas le paramètre — on
+/// ignore (les défauts restent en vigueur). Vise une meilleure netteté à bitrate
+/// donné qu'en CBR brut.
+unsafe fn apply_quality_settings(transform: &IMFTransform, config: &EncoderConfig) {
+    let codec: ICodecAPI = match transform.cast() {
+        Ok(c) => c,
+        Err(_) => return, // pas de ICodecAPI → on garde les défauts
+    };
+
+    let set_u32 = |guid: &windows::core::GUID, v: u32| {
+        let variant = windows::core::VARIANT::from(v);
+        let _ = codec.SetValue(guid, &variant);
+    };
+
+    // VBR à débit de crête contraint : l'encodeur alloue plus de bits aux scènes
+    // complexes (mouvement, détail) et moins aux zones simples → meilleure netteté
+    // perçue que le CBR, tout en restant borné par maxBitrate pour le réseau.
+    set_u32(
+        &CODECAPI_AVEncCommonRateControlMode,
+        eAVEncCommonRateControlMode_CBR.0 as u32,
+    );
+    set_u32(&CODECAPI_AVEncCommonMeanBitRate, config.bitrate_bps);
+    // Plafond de crête à 1.5× la moyenne (laisse de la marge sur les pics).
+    set_u32(
+        &CODECAPI_AVEncCommonMaxBitRate,
+        config.bitrate_bps.saturating_mul(3) / 2,
+    );
+
+    // Qualité-vs-vitesse (0..100). Mesuré : 100 fait CHUTER le débit de l'iGPU AMD
+    // (~53→31 fps) — l'analyse exhaustive sature le moteur d'encodage. Pour un
+    // usage temps-réel/gaming, on privilégie le DÉBIT : 34 favorise la vitesse tout
+    // en gardant un peu de gain qualité vs le mode le plus rapide.
+    set_u32(&CODECAPI_AVEncCommonQualityVsSpeed, 0);
+    set_u32(&CODECAPI_AVEncCommonRealTime, 1);
+    set_u32(&CODECAPI_AVEncCommonAllowFrameDrops, 0);
+    set_u32(&CODECAPI_AVEncMPVDefaultBPictureCount, 0);
+
+    // GOP long : moins de keyframes (coûteuses) → plus de bits pour le détail des
+    // frames intermédiaires. 0 (depuis EncoderConfig) = on laisse l'encodeur, sinon
+    // on impose ~2 s de GOP.
+    let gop = if config.gop_length > 0 {
+        config.gop_length
+    } else {
+        config.framerate.saturating_mul(2).max(1)
+    };
+    set_u32(&CODECAPI_AVEncMPVGOPSize, gop);
+
+    // Mode basse latence de l'encodeur (pas de réordonnancement = pas de B-frames).
+    if config.low_latency {
+        set_u32(&CODECAPI_AVEncCommonLowLatency, 1);
+    }
+}
+
 /// Type de sortie H264 : résolution, framerate, bitrate, profil High.
 unsafe fn set_output_type(transform: &IMFTransform, config: &EncoderConfig) -> Result<()> {
     let mt: IMFMediaType = MFCreateMediaType()?;
@@ -329,7 +438,7 @@ unsafe fn set_output_type(transform: &IMFTransform, config: &EncoderConfig) -> R
     mt.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_H264)?;
     mt.SetUINT32(&MF_MT_AVG_BITRATE, config.bitrate_bps)?;
     mt.SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32)?;
-    mt.SetUINT32(&MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_High.0 as u32)?;
+    mt.SetUINT32(&MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Main.0 as u32)?;
     set_ratio(&mt, &MF_MT_FRAME_SIZE, config.width, config.height)?;
     set_ratio(&mt, &MF_MT_FRAME_RATE, config.framerate, 1)?;
     set_ratio(&mt, &MF_MT_PIXEL_ASPECT_RATIO, 1, 1)?;
@@ -403,7 +512,9 @@ fn find_hardware_h264_encoder(vendor: Vendor) -> Result<(IMFTransform, String)> 
         let mut first: Option<(IMFTransform, String)> = None;
 
         for activate_opt in slice {
-            let Some(activate) = activate_opt else { continue };
+            let Some(activate) = activate_opt else {
+                continue;
+            };
             let name = read_friendly_name(activate).unwrap_or_else(|| "MFT inconnu".to_string());
             let transform: Result<IMFTransform, _> = activate.ActivateObject();
             let Ok(transform) = transform else { continue };
