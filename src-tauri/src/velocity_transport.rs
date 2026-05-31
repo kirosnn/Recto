@@ -38,6 +38,9 @@ pub struct VelocityStartResult {
 struct VelocitySession {
     pc: Arc<RTCPeerConnection>,
     stop: Arc<AtomicBool>,
+    settings: VelocityStartSettings,
+    video_track: Arc<TrackLocalStaticSample>,
+    audio_track: Option<Arc<TrackLocalStaticSample>>,
     video_thread: Option<JoinHandle<()>>,
     audio_thread: Option<JoinHandle<()>>,
 }
@@ -161,30 +164,41 @@ pub async fn start(settings: VelocityStartSettings) -> Result<VelocityStartResul
         .ok_or_else(|| anyhow!("Velocity offer was not generated"))?;
 
     let stop_flag = Arc::new(AtomicBool::new(false));
-    let video_thread = spawn_video_thread(
-        Arc::clone(&video_track),
-        Arc::clone(&stop_flag),
-        settings.target_fps,
-    );
-    let audio_thread = audio_track.map(|track| spawn_audio_thread(track, Arc::clone(&stop_flag)));
-
     let mut guard = state().lock().await;
     *guard = Some(VelocitySession {
         pc,
         stop: stop_flag,
-        video_thread: Some(video_thread),
-        audio_thread,
+        settings,
+        video_track,
+        audio_track,
+        video_thread: None,
+        audio_thread: None,
     });
 
     Ok(VelocityStartResult { offer })
 }
 
 pub async fn accept_answer(answer: RTCSessionDescription) -> Result<()> {
-    let guard = state().lock().await;
+    let mut guard = state().lock().await;
     let session = guard
-        .as_ref()
+        .as_mut()
         .ok_or_else(|| anyhow!("Velocity session is not active"))?;
     session.pc.set_remote_description(answer).await?;
+    if session.video_thread.is_none() {
+        session.video_thread = Some(spawn_video_thread(
+            Arc::clone(&session.video_track),
+            Arc::clone(&session.stop),
+            session.settings.target_fps,
+        ));
+    }
+    if session.settings.audio_enabled && session.audio_thread.is_none() {
+        if let Some(track) = &session.audio_track {
+            session.audio_thread = Some(spawn_audio_thread(
+                Arc::clone(track),
+                Arc::clone(&session.stop),
+            ));
+        }
+    }
     Ok(())
 }
 
