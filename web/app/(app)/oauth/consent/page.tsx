@@ -6,10 +6,10 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 
 const SCOPES: Record<string, { label: string; description: string; icon: string }> = {
-  "session:create":  { label: "Créer des sessions",       description: "Démarrer un partage d'écran en ton nom",            icon: "🖥" },
-  "session:read":    { label: "Voir tes sessions",         description: "Accéder à la liste de tes sessions actives",         icon: "👁" },
-  "session:join":    { label: "Rejoindre des sessions",    description: "Se connecter en Verso à tes sessions",               icon: "📺" },
-  "profile:read":    { label: "Lire ton profil",           description: "Accéder à ton nom et ton adresse e-mail",            icon: "👤" },
+  "session:create":  { label: "Créer des sessions",       description: "Démarrer un partage d'écran en ton nom",            icon: "CR" },
+  "session:read":    { label: "Voir tes sessions",         description: "Accéder à la liste de tes sessions actives",         icon: "SR" },
+  "session:join":    { label: "Rejoindre des sessions",    description: "Se connecter en Verso à tes sessions",               icon: "JO" },
+  "profile:read":    { label: "Lire ton profil",           description: "Accéder à ton nom et ton adresse e-mail",            icon: "ID" },
 };
 
 function ConsentForm() {
@@ -40,7 +40,6 @@ function ConsentForm() {
     if (!redirectUri) { setError("redirect_uri manquant"); return; }
     setStatus("allowing");
     try {
-      // Generate authorization code via Supabase edge function (or simple token)
       const res = await fetch("/api/oauth/authorize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -63,76 +62,72 @@ function ConsentForm() {
   }
 
   return (
-    <div className="w-full max-w-sm bg-zinc-900 border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
-      {/* Header */}
-      <div className="px-7 pt-8 pb-6 border-b border-white/8">
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-10 rounded-xl bg-brand-600/20 border border-brand-500/30 flex items-center justify-center text-lg">
-            🔗
+    <div className="site-card" style={{ width: "100%", maxWidth: 390, overflow: "hidden" }}>
+      <div style={{ padding: "30px 28px 24px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+          <div className="site-icon-box">
+            <span style={{ fontSize: "0.78rem", fontWeight: 700 }}>OA</span>
           </div>
-          <div className="text-sm text-zinc-400">
-            <span className="font-semibold text-white">{appName}</span>
+          <div style={{ color: "var(--tx-2)", fontSize: "0.9rem", lineHeight: 1.45 }}>
+            <span style={{ color: "var(--tx)", fontWeight: 600 }}>{appName}</span>
             <br />demande l&apos;accès à ton compte Recto
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-zinc-600">
-          <span className="w-2 h-2 rounded-full bg-emerald-400" />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--tx-3)", fontSize: "0.78rem" }}>
+          <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--tx)", display: "inline-block" }} />
           kirossenrecto.vercel.app
         </div>
       </div>
 
-      {/* Scopes */}
-      <div className="px-7 py-5">
-        <p className="text-xs text-zinc-500 uppercase tracking-widest mb-3">
+      <div style={{ padding: "22px 28px" }}>
+        <p style={{ margin: "0 0 14px", color: "var(--tx-3)", fontSize: "0.72rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>
           Autorisations demandées
         </p>
-        <ul className="flex flex-col gap-2.5">
+        <ul style={{ display: "flex", flexDirection: "column", gap: 12, margin: 0, padding: 0, listStyle: "none" }}>
           {requestedScopes.length > 0 ? (
             requestedScopes.map((s) => (
-              <li key={s} className="flex items-start gap-3">
-                <span className="text-base mt-0.5">{SCOPES[s].icon}</span>
+              <li key={s} style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <span className="site-icon-box" style={{ width: 30, height: 30, fontSize: "0.7rem", fontWeight: 700, flexShrink: 0 }}>{SCOPES[s].icon}</span>
                 <div>
-                  <div className="text-sm font-medium text-white">{SCOPES[s].label}</div>
-                  <div className="text-xs text-zinc-500">{SCOPES[s].description}</div>
+                  <div style={{ color: "var(--tx)", fontSize: "0.9rem", fontWeight: 500 }}>{SCOPES[s].label}</div>
+                  <div className="site-muted" style={{ fontSize: "0.8rem", lineHeight: 1.45 }}>{SCOPES[s].description}</div>
                 </div>
               </li>
             ))
           ) : (
-            <li className="text-xs text-zinc-600">Aucune permission spécifique.</li>
+            <li className="site-muted" style={{ fontSize: "0.8rem" }}>Aucune permission spécifique.</li>
           )}
         </ul>
       </div>
 
-      {/* Warning */}
-      <div className="mx-7 mb-5 px-3 py-2.5 rounded-lg bg-amber-500/8 border border-amber-500/15 text-xs text-amber-300/80 leading-relaxed">
+      <div style={{ margin: "0 28px 20px", padding: "12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-alt)", color: "var(--tx-2)", fontSize: "0.8rem", lineHeight: 1.55 }}>
         N&apos;autorise que les apps en lesquelles tu as confiance. Recto ne
         te demandera jamais ton mot de passe via une app tierce.
       </div>
 
       {error && (
-        <p className="mx-7 mb-4 text-xs text-red-400">{error}</p>
+        <p style={{ margin: "0 28px 16px", color: "#c4623e", fontSize: "0.8rem" }}>{error}</p>
       )}
 
-      {/* Actions */}
-      <div className="px-7 pb-7 flex gap-3">
+      <div style={{ padding: "0 28px 28px", display: "flex", gap: 10 }}>
         <button
           onClick={deny}
           disabled={status !== "idle"}
-          className="flex-1 py-2.5 rounded-lg border border-white/10 text-sm text-zinc-400
-                     hover:border-white/20 hover:text-white transition-colors disabled:opacity-40"
+          className="main-button main-button-secondary"
+          style={{ flex: 1, minHeight: 42, opacity: status !== "idle" ? 0.45 : 1 }}
         >
           {status === "denying" ? "Refus…" : "Refuser"}
         </button>
         <button
           onClick={allow}
           disabled={status !== "idle"}
-          className="flex-1 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-sm font-semibold
-                     transition-colors disabled:opacity-40"
+          className="main-button main-button-primary"
+          style={{ flex: 1, minHeight: 42, opacity: status !== "idle" ? 0.45 : 1 }}
         >
           {status === "allowing" ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+              <span className="site-spinner" />
               Autorisation…
             </span>
           ) : (
@@ -146,29 +141,28 @@ function ConsentForm() {
 
 function ErrorCard({ message }: { message: string }) {
   return (
-    <div className="w-full max-w-sm bg-zinc-900 border border-red-500/20 rounded-2xl p-8 text-center">
-      <div className="text-2xl mb-3">⚠️</div>
-      <p className="text-sm text-zinc-400">{message}</p>
+    <div className="site-card" style={{ width: "100%", maxWidth: 390, padding: 32, textAlign: "center" }}>
+      <p className="site-text" style={{ margin: 0 }}>{message}</p>
     </div>
   );
 }
 
 export default function OAuthConsentPage() {
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6 gap-6">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="font-bold text-white tracking-wide text-lg">Recto</span>
+    <div className="site-shell" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 24 }}>
+      <div className="site-content" style={{ width: "min(100%, 390px)", textAlign: "center" }}>
+        <span style={{ color: "var(--tx)", fontSize: "1.05rem", fontWeight: 650 }}>Recto</span>
       </div>
 
       <Suspense fallback={
-        <div className="w-full max-w-sm bg-zinc-900 border border-white/10 rounded-2xl p-10 flex justify-center">
-          <span className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+        <div className="site-card" style={{ width: "100%", maxWidth: 390, padding: 40, display: "flex", justifyContent: "center" }}>
+          <span className="site-spinner" />
         </div>
       }>
         <ConsentForm />
       </Suspense>
 
-      <p className="text-xs text-zinc-700 text-center max-w-xs">
+      <p className="site-muted" style={{ position: "relative", zIndex: 1, margin: 0, textAlign: "center", maxWidth: 320, fontSize: "0.78rem", lineHeight: 1.55 }}>
         En autorisant, tu accordes à cette application les permissions listées
         ci-dessus sur ton compte Recto.
       </p>
