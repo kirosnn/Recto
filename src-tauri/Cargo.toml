@@ -36,6 +36,8 @@ windows = { version = "0.58", features = [
     "Win32_Graphics_Direct3D",
     "Win32_Graphics_Direct3D11",
     "Win32_System_Threading",
+    "Win32_System_Com",
+    "Win32_Media_MediaFoundation",
 ] }
 vigem-client = "0.1"
 
@@ -45,6 +47,13 @@ vigem-client = "0.1"
 [[example]]
 name = "capture_probe"
 path = "examples/capture_probe.rs"
+
+# Probe phase 2 (étape A) : prouve l'accès au MFT encodeur H264 matériel du
+# vendeur GPU (AMD) via Media Foundation. Lancer avec :
+#   cargo run --example encode_probe --manifest-path src-tauri/Cargo.toml
+[[example]]
+name = "encode_probe"
+path = "examples/encode_probe.rs"
 
 [profile.release]
 opt-level = 3
