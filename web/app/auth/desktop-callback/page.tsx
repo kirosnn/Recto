@@ -4,16 +4,20 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import BackButton from "../../../components/BackButton";
 
+const allowedSchemes = new Set(["recto", "recto-dev-recto", "recto-dev-verso"]);
+
 function buildAppUrl(search: string) {
   const params = new URLSearchParams(search);
   const appParams = new URLSearchParams();
+  const requestedScheme = params.get("scheme") ?? "recto";
+  const scheme = allowedSchemes.has(requestedScheme) ? requestedScheme : "recto";
 
   for (const key of ["code", "error", "error_code", "error_description", "state"]) {
     const value = params.get(key);
     if (value) appParams.set(key, value);
   }
 
-  return `recto://auth/callback${appParams.size ? `?${appParams.toString()}` : ""}`;
+  return `${scheme}://auth/callback${appParams.size ? `?${appParams.toString()}` : ""}`;
 }
 
 export default function DesktopCallbackPage() {
