@@ -18,16 +18,13 @@ export default function VersoPage() {
   const [error, setError] = useState("");
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [inputChannel, setInputChannel] = useState<RTCDataChannel | null>(null);
-  // Defaults to 1920×1080; updated when Recto sends displayInfo over DataChannel
   const [hostSize, setHostSize] = useState({ w: 1920, h: 1080 });
   const [peer, setPeer] = useState<PeerIdentity | null>(null);
-  // Ctrl+Alt+H hides the on-video overlays for an immersive view
   const [hideUI, setHideUI] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [showModal, setShowModal] = useState(true);
   const conn = useRef<WebVersoConnection | null>(null);
   const { settings } = useWebSettings();
-  // Our own Discord identity, sent to Recto once the input channel opens
   const selfIdentity = useRef<Identity | null>(null);
 
   useEffect(() => {
@@ -37,7 +34,6 @@ export default function VersoPage() {
     });
   }, []);
 
-  // Announce our identity to Recto as soon as the channel is open
   useEffect(() => {
     if (!inputChannel) return;
     const send = () => {
@@ -52,8 +48,6 @@ export default function VersoPage() {
         );
       }
     };
-    // Identity travels on the unreliable input channel, so send a few times to
-    // beat early packet loss.
     send();
     const t1 = setTimeout(send, 400);
     const t2 = setTimeout(send, 1200);
@@ -75,7 +69,6 @@ export default function VersoPage() {
       setError("Le code doit faire 6 caractères");
       return;
     }
-    // Requested within the click gesture so the browser allows it
     document.documentElement.requestFullscreen?.().catch(() => {});
     setStatus("connecting");
     setError("");
@@ -113,7 +106,7 @@ export default function VersoPage() {
       setStatus("error");
       conn.current = null;
     }
-  }, [code, settings.requestedCodec]);
+  }, [code, settings.lowLatencyMode, settings.requestedCodec]);
 
   const handleDisconnect = () => {
     conn.current?.stop();
@@ -127,7 +120,6 @@ export default function VersoPage() {
     exitFullscreen();
   };
 
-  // Toggle stats overlay with Ctrl+Alt+S
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.altKey && e.code === "KeyS") {
@@ -144,12 +136,10 @@ export default function VersoPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Sync showStats from drawer settings
   useEffect(() => {
     setShowStats(settings.showStats);
   }, [settings.showStats]);
 
-  // Send requested stream settings to Recto as soon as input channel is ready
   useEffect(() => {
     if (!inputChannel) return;
     const sendClientSettings = () => {
@@ -244,30 +234,24 @@ export default function VersoPage() {
 
   return (
     <div
-      className="main-page recto-form-page"
+      className="site-shell recto-form-page"
       style={{
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        minHeight: "100vh",
-        position: "relative",
       }}
     >
       <BackButton href="/" />
 
       <div
-        className="recto-form-inner"
-        style={{ width: "100%", maxWidth: "360px" }}
+        className="site-content site-form-content recto-form-inner"
       >
-        <h1 className="main-intro" style={{ textAlign: "left", marginTop: 0 }}>
+        <h1 className="site-title">
           Se connecter.
         </h1>
 
-        <p
-          className="main-body"
-          style={{ textAlign: "left", marginTop: "10px", width: "100%" }}
-        >
+        <p className="site-text">
           Entre le code affiché sur l&apos;écran Recto.
         </p>
 
@@ -279,7 +263,6 @@ export default function VersoPage() {
             gap: "10px",
           }}
         >
-          {/* Code input — font-size 16px minimum évite le zoom iOS */}
           <input
             type="text"
             inputMode="text"
@@ -364,7 +347,7 @@ export default function VersoPage() {
             -webkit-appearance: none;
           }
           .verso-code-input::placeholder { color: rgba(18,18,18,0.2); letter-spacing: 0.28em; }
-          .verso-code-input:focus { border-color: #d97757; box-shadow: 0 0 0 3px rgba(217,119,87,0.12); }
+          .verso-code-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(18,18,18,0.08); }
           .verso-code-input:disabled { opacity: 0.5; }
 
           html[data-theme="dark"] .verso-code-input {
@@ -380,13 +363,12 @@ export default function VersoPage() {
         `}</style>
       </div>
 
-      {/* Modal d'avertissement à l'arrivée sur Verso */}
       {showModal && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0, 0, 0, 0.7)",
+            background: "rgba(0, 0, 0, 0.64)",
             backdropFilter: "blur(20px)",
             WebkitBackdropFilter: "blur(20px)",
             display: "flex",
@@ -401,32 +383,24 @@ export default function VersoPage() {
               position: "relative",
               maxWidth: 520,
               width: "100%",
-              background: "var(--bg)",
-              borderRadius: 20,
+              background: "var(--surface)",
+              borderRadius: 8,
               padding: "40px 32px 32px",
-              boxShadow: "0 25px 50px -12px rgb(0 0 0 / 0.4)",
+              border: "1px solid var(--border-2)",
+              boxShadow: "0 20px 45px rgba(0,0,0,0.22)",
               textAlign: "center",
               color: "var(--tx)",
             }}
           >
-            {/* Close button */}
             <button
               onClick={() => setShowModal(false)}
+              className="site-close-button"
               style={{
                 position: "absolute",
                 top: 16,
                 right: 16,
-                width: 36,
-                height: 36,
-                border: "none",
-                background: "none",
-                color: "var(--tx-3)",
                 fontSize: "28px",
                 lineHeight: 1,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
               }}
               aria-label="Fermer"
             >
@@ -495,18 +469,13 @@ export default function VersoPage() {
               <a
                 href="https://github.com/kirosnn/Recto/releases/latest"
                 target="_blank"
+                className="main-button main-button-primary"
                 style={{
-                  padding: "14px 32px",
-                  borderRadius: 14,
-                  background: "#d97757",
-                  color: "white",
-                  textDecoration: "none",
-                  fontWeight: 600,
-                  fontSize: "0.95rem",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 10,
-                  boxShadow: "0 4px 12px rgba(217, 119, 87, 0.3)",
+                  minHeight: 50,
+                  padding: "0 32px",
+                  background: "var(--tx)",
+                  color: "var(--bg)",
+                  borderColor: "var(--tx)",
                 }}
               >
                 Télécharger Recto
