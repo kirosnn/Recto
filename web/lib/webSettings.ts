@@ -6,11 +6,15 @@ import {
   type Codec,
   type Resolution,
   type DisplayMode,
+  type StreamEngine,
   PRESETS,
 } from "../../src/lib/settings";
 
 export interface WebClientSettings {
   qualityTuningVersion: number;
+  // Engine selector. On the web, Velocity (native) is never usable — the field
+  // exists for parity and to display the disabled choice, but stays "browser".
+  engine: StreamEngine;
   preset: QualityPreset;
   maxBitrateKbps: number | null;
   targetFps: number;
@@ -30,7 +34,8 @@ export interface WebClientSettings {
 }
 
 export const WEB_DEFAULTS: WebClientSettings = {
-  qualityTuningVersion: 3,
+  qualityTuningVersion: 4,
+  engine: "browser",
   preset: "quality",
   maxBitrateKbps: 120_000,
   targetFps: 60,
@@ -78,6 +83,12 @@ function load(): WebClientSettings {
         migrated.resolution = "native";
       }
       migrated.qualityTuningVersion = 3;
+    }
+
+    // v4: engine selector (web always stays browser).
+    if ((stored.qualityTuningVersion ?? 0) < 4) {
+      migrated.engine = "browser";
+      migrated.qualityTuningVersion = 4;
     }
 
     return { ...WEB_DEFAULTS, ...migrated };
