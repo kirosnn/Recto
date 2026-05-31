@@ -15,3 +15,6 @@ web/out
 
 .vercel
 native_capture.h264
+native_capture.264
+native_capture.mkv
+native_audio.f32
