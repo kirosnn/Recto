@@ -243,13 +243,20 @@ fn run_video_loop(
 
     let hw = crate::hw_encoder::detect();
     let vendor = Vendor::from_str(&hw.vendor);
-    let mut capture = DesktopDuplicator::new(0)?;
+    let output_index = crate::input::get_displays()
+        .into_iter()
+        .find(|display| display.primary)
+        .map(|display| display.id)
+        .unwrap_or(0);
+    let mut capture = DesktopDuplicator::new(output_index)?;
     let (width, height) = capture.dimensions();
     let mut config = EncoderConfig::for_desktop(width, height);
     config.framerate = target_fps;
     let device = capture.device().clone();
     let context: ID3D11DeviceContext = unsafe { device.GetImmediateContext()? };
     let mut encoder = create_encoder(vendor, &device, config)?;
+    let sequence_header = encoder.sequence_header().unwrap_or_default();
+    let mut sequence_header_sent = sequence_header.is_empty();
     let mut cached_texture: Option<ID3D11Texture2D> = None;
     let frame_duration = Duration::from_secs_f64(1.0 / target_fps as f64);
     let mut next_frame = Instant::now();
@@ -282,8 +289,16 @@ fn run_video_loop(
         let timestamp = (started.elapsed().as_secs_f64() * 10_000_000.0) as i64;
         encoder.encode(texture, timestamp)?;
         for packet in encoder.drain()? {
+            let data = if !sequence_header_sent {
+                sequence_header_sent = true;
+                let mut data = sequence_header.clone();
+                data.extend_from_slice(&packet.data);
+                data
+            } else {
+                packet.data
+            };
             let sample = Sample {
-                data: Bytes::from(packet.data),
+                data: Bytes::from(data),
                 timestamp: SystemTime::now(),
                 duration: frame_duration,
                 ..Default::default()
