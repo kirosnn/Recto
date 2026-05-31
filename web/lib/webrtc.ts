@@ -65,6 +65,8 @@ export class WebVersoConnection {
             this.cb.onDisplayInfo(data.width, data.height);
           } else if (data.type === "identity") {
             this.cb.onIdentity({ name: data.name, avatar: data.avatar ?? null });
+          } else if (data.type === "velocityDiag") {
+            console.info("[VELOCITY]", data.event, data.payload);
           }
         } catch {}
       };

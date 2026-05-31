@@ -11,6 +11,7 @@ use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_H264, MIME_TYPE_OPUS};
 use webrtc::api::APIBuilder;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
+use webrtc::data_channel::RTCDataChannel;
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::media::Sample;
 use webrtc::peer_connection::configuration::RTCConfiguration;
@@ -41,6 +42,7 @@ struct VelocitySession {
     settings: VelocityStartSettings,
     video_track: Arc<TrackLocalStaticSample>,
     audio_track: Option<Arc<TrackLocalStaticSample>>,
+    input_channel: Arc<RTCDataChannel>,
     video_thread: Option<JoinHandle<()>>,
     audio_thread: Option<JoinHandle<()>>,
 }
@@ -174,6 +176,7 @@ pub async fn start(settings: VelocityStartSettings) -> Result<VelocityStartResul
         settings,
         video_track,
         audio_track,
+        input_channel,
         video_thread: None,
         audio_thread: None,
     });
@@ -192,6 +195,7 @@ pub async fn accept_answer(answer: RTCSessionDescription) -> Result<()> {
             Arc::clone(&session.video_track),
             Arc::clone(&session.stop),
             session.settings.target_fps,
+            Arc::clone(&session.input_channel),
         ));
     }
     if session.settings.audio_enabled && session.audio_thread.is_none() {
@@ -229,15 +233,40 @@ fn state() -> &'static Mutex<Option<VelocitySession>> {
     SESSION.get_or_init(|| Mutex::new(None))
 }
 
+fn send_velocity_diag(
+    handle: &tokio::runtime::Handle,
+    channel: &Arc<RTCDataChannel>,
+    event: &str,
+    payload: serde_json::Value,
+) {
+    let _ = handle.block_on(channel.send_text(
+        serde_json::json!({
+            "type": "velocityDiag",
+            "event": event,
+            "payload": payload,
+        })
+        .to_string(),
+    ));
+}
+
 fn spawn_video_thread(
     track: Arc<TrackLocalStaticSample>,
     stop: Arc<AtomicBool>,
     target_fps: u32,
+    channel: Arc<RTCDataChannel>,
 ) -> JoinHandle<()> {
     let fps = target_fps.clamp(30, 60);
     let handle = tokio::runtime::Handle::current();
     std::thread::spawn(move || {
-        let _ = run_video_loop(track, stop, fps, handle);
+        let send_handle = handle.clone();
+        if let Err(err) = run_video_loop(track, stop, fps, handle, Arc::clone(&channel)) {
+            send_velocity_diag(
+                &send_handle,
+                &channel,
+                "videoError",
+                serde_json::json!({ "message": err.to_string() }),
+            );
+        }
     })
 }
 
@@ -254,6 +283,7 @@ fn run_video_loop(
     stop: Arc<AtomicBool>,
     target_fps: u32,
     handle: tokio::runtime::Handle,
+    channel: Arc<RTCDataChannel>,
 ) -> Result<()> {
     use crate::capture::DesktopDuplicator;
     use crate::encoder::{create_encoder, EncoderConfig, Vendor};
@@ -278,6 +308,23 @@ fn run_video_loop(
     let frame_duration = Duration::from_secs_f64(1.0 / target_fps as f64);
     let mut next_frame = Instant::now();
     let started = Instant::now();
+    let mut last_diag = Instant::now();
+    let mut captured_frames = 0u64;
+    let mut encoded_packets = 0u64;
+    let mut write_errors = 0u64;
+
+    send_velocity_diag(
+        &handle,
+        &channel,
+        "videoStart",
+        serde_json::json!({
+            "outputIndex": output_index,
+            "width": width,
+            "height": height,
+            "targetFps": target_fps,
+            "headerBytes": sequence_header.len(),
+        }),
+    );
 
     while !stop.load(Ordering::SeqCst) {
         let now = Instant::now();
@@ -291,6 +338,7 @@ fn run_video_loop(
             Ok(None) => continue,
             Err(_) => continue,
         };
+        captured_frames += 1;
 
         if cached_texture.is_none() {
             cached_texture = Some(create_cached_texture(&device, width, height)?);
@@ -320,7 +368,26 @@ fn run_video_loop(
                 duration: frame_duration,
                 ..Default::default()
             };
-            let _ = handle.block_on(track.write_sample(&sample));
+            if handle.block_on(track.write_sample(&sample)).is_err() {
+                write_errors += 1;
+            } else {
+                encoded_packets += 1;
+            }
+        }
+
+        if last_diag.elapsed() >= Duration::from_secs(1) {
+            send_velocity_diag(
+                &handle,
+                &channel,
+                "videoStats",
+                serde_json::json!({
+                    "capturedFrames": captured_frames,
+                    "encodedPackets": encoded_packets,
+                    "writeErrors": write_errors,
+                    "elapsedMs": started.elapsed().as_millis(),
+                }),
+            );
+            last_diag = Instant::now();
         }
     }
 
@@ -333,6 +400,7 @@ fn run_video_loop(
     _stop: Arc<AtomicBool>,
     _target_fps: u32,
     _handle: tokio::runtime::Handle,
+    _channel: Arc<RTCDataChannel>,
 ) -> Result<()> {
     Err(anyhow!("Velocity is only available on Windows"))
 }

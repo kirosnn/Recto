@@ -433,6 +433,8 @@ export class VersoConnection {
               targetFps: data.targetFps ?? 60,
               codec: data.codec ?? "auto",
             });
+          } else if (data.type === "velocityDiag") {
+            console.info("[VELOCITY]", data.event, data.payload);
           }
         } catch {}
       };
