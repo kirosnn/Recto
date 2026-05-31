@@ -76,6 +76,9 @@ pub async fn start(settings: VelocityStartSettings) -> Result<VelocityStartResul
         RTCRtpCodecCapability {
             mime_type: MIME_TYPE_H264.to_string(),
             clock_rate: 90_000,
+            sdp_fmtp_line:
+                "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=64002a"
+                    .to_string(),
             ..Default::default()
         },
         "video".to_string(),
