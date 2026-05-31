@@ -81,45 +81,34 @@ fn main() {
     std::thread::sleep(Duration::from_secs(3));
     let _ = dup.acquire(0); // vide la frame de warmup
 
-    // 5. Boucle à CADENCE FIXE 60 Hz. Clé du "60 fps constant" : on encode une
-    //    frame à chaque tick de 16,67 ms, même si le bureau n'a pas changé — dans
-    //    ce cas on ré-encode la dernière texture capturée. Sans ça, un écran figé
-    //    ne produit aucune frame et la cadence s'effondre. La capture DXGI est
-    //    interrogée en non-bloquant (timeout 0) à chaque tick ; si elle a du neuf
-    //    on met à jour la texture courante, sinon on garde la précédente.
+    // 5. Boucle capture→encode→fichier. On encode CHAQUE frame fraîche
+    //    IMMÉDIATEMENT : la texture Desktop Duplication n'est valide que jusqu'au
+    //    prochain acquire() (qui la libère). On ne peut donc PAS la stocker pour
+    //    l'encoder à un tick ultérieur — ça donne E_INVALIDARG sur texture morte.
+    //    (La cadence fixe 60 Hz avec ré-encodage sur écran figé nécessitera une
+    //    COPIE de la texture dans une ressource qu'on possède — étape suivante.)
     let probe = Duration::from_secs(10);
     let start = Instant::now();
     let mut encoded_frames = 0u64;
     let mut encoded_packets = 0u64;
     let mut bytes_written = 0u64;
-    let frame_interval = Duration::from_micros(1_000_000 / 60); // 60 Hz
+    let frame_interval = Duration::from_micros(1_000_000 / 60);
     let mut next_tick = Instant::now();
 
-    // Dernière texture capturée (clone COM ref-compté), réutilisée sur écran figé.
-    let mut last_texture: Option<windows::Win32::Graphics::Direct3D11::ID3D11Texture2D> = None;
-
     while start.elapsed() < probe {
-        // Récupère la dernière frame dispo sans bloquer (vide la file DXGI).
-        loop {
-            match dup.acquire(0) {
-                Ok(Some(frame)) => {
-                    last_texture = Some(frame.texture);
-                    // on continue à pomper pour avoir la PLUS récente
-                }
-                Ok(None) => break, // plus rien de neuf
-                Err(e) => {
-                    eprintln!("[encode_probe] capture err: {e}");
-                    break;
+        // Bloque jusqu'à 16 ms pour la prochaine frame, puis encode tout de suite.
+        match dup.acquire(16) {
+            Ok(Some(frame)) => {
+                let ts_100ns = start.elapsed().as_nanos() as i64 / 100;
+                match enc.encode(&frame.texture, ts_100ns) {
+                    Ok(()) => encoded_frames += 1,
+                    Err(e) => eprintln!("[encode_probe] encode err: {e}"),
                 }
             }
-        }
-
-        // Encode la texture courante (fraîche ou répétée) à ce tick.
-        if let Some(tex) = &last_texture {
-            let ts_100ns = start.elapsed().as_nanos() as i64 / 100;
-            match enc.encode(tex, ts_100ns) {
-                Ok(()) => encoded_frames += 1,
-                Err(e) => eprintln!("[encode_probe] encode err: {e}"),
+            Ok(None) => {} // écran figé : rien de neuf
+            Err(e) => {
+                eprintln!("[encode_probe] capture err: {e}");
+                std::thread::sleep(Duration::from_millis(20));
             }
         }
 
@@ -135,13 +124,13 @@ fn main() {
             Err(e) => eprintln!("[encode_probe] drain err: {e}"),
         }
 
-        // Cadence fixe : dors jusqu'au prochain tick 60 Hz.
+        // Pacing léger pour ne pas spinner à vide quand l'écran est figé.
         next_tick += frame_interval;
         let now = Instant::now();
         if next_tick > now {
             std::thread::sleep(next_tick - now);
         } else {
-            next_tick = now; // on a pris du retard, on resynchronise
+            next_tick = now;
         }
     }
 
@@ -152,7 +141,6 @@ fn main() {
     println!("  durée             : {secs:.1} s");
     println!("  frames encodées   : {encoded_frames} ({:.1} fps)", encoded_frames as f64 / secs);
     println!("  paquets H264      : {encoded_packets}");
-    println!("  frames jetées     : {} (backpressure encodeur)", enc.dropped_frames());
     println!("  taille écrite     : {:.2} Mo", bytes_written as f64 / 1_000_000.0);
     println!("  bitrate effectif  : {:.1} Mbps", (bytes_written as f64 * 8.0 / secs) / 1_000_000.0);
     println!("\n  Fichier : {out_path}");
