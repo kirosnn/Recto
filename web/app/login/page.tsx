@@ -14,13 +14,16 @@ export default async function LoginPage({
   if (user) redirect(next ?? "/verso");
 
   return (
-    <div className="main-page recto-form-page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
-      <div className="recto-form-inner" style={{ width: "100%", maxWidth: "360px" }}>
-        <h1 className="main-intro" style={{ textAlign: "left", marginTop: 0 }}>
+    <div
+      className="site-shell recto-form-page"
+      style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}
+    >
+      <div className="site-content site-form-content recto-form-inner">
+        <h1 className="site-title">
           Bienvenue.
         </h1>
 
-        <p className="main-body" style={{ textAlign: "left", marginTop: "12px", width: "100%" }}>
+        <p className="site-text">
           Connecte-toi avec Discord pour accéder à Recto et Verso.
         </p>
 
@@ -28,10 +31,7 @@ export default async function LoginPage({
           <LoginButton next={next} />
         </div>
 
-        <p style={{
-          marginTop: "16px", fontSize: "0.82rem",
-          color: "#a39589", lineHeight: 1.6, textAlign: "center",
-        }}>
+        <p className="site-muted" style={{ marginTop: "16px", fontSize: "0.82rem", lineHeight: 1.6, textAlign: "center" }}>
           Seul ton pseudo et identifiant Discord sont utilisés.
         </p>
       </div>
