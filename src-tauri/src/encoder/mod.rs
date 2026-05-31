@@ -97,6 +97,12 @@ pub trait VideoEncoder {
     fn sequence_header(&self) -> Result<Vec<u8>> {
         Ok(Vec::new())
     }
+
+    /// Frames jetées par l'encodeur faute de pouvoir suivre (backpressure).
+    /// 0 par défaut ; diagnostic de cadence.
+    fn dropped_frames(&self) -> u64 {
+        0
+    }
 }
 
 /// Crée l'encodeur adapté au vendeur. Le device D3D11 DOIT être celui de la
