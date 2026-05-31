@@ -30,9 +30,9 @@ export interface WebClientSettings {
 }
 
 export const WEB_DEFAULTS: WebClientSettings = {
-  qualityTuningVersion: 2,
-  preset: "balanced",
-  maxBitrateKbps: 50_000,
+  qualityTuningVersion: 3,
+  preset: "quality",
+  maxBitrateKbps: 120_000,
   targetFps: 60,
   codec: "H264",
   audioEnabled: true,
@@ -42,7 +42,7 @@ export const WEB_DEFAULTS: WebClientSettings = {
   showStats: false,
   lowLatencyMode: true,
   virtualGamepadSensitivity: 0.025,
-  requestedBitrateKbps: 50_000,
+  requestedBitrateKbps: 120_000,
   requestedFps: 60,
   requestedCodec: "auto",
   hardwareDecode: true,
@@ -64,6 +64,20 @@ function load(): WebClientSettings {
         migrated.requestedBitrateKbps = 50_000;
       }
       migrated.qualityTuningVersion = 2;
+    }
+
+    if ((stored.qualityTuningVersion ?? 0) < 3) {
+      if (
+        (migrated.preset ?? stored.preset) === "balanced" &&
+        (migrated.maxBitrateKbps ?? stored.maxBitrateKbps) === 50_000 &&
+        (migrated.requestedBitrateKbps ?? stored.requestedBitrateKbps) === 50_000
+      ) {
+        migrated.preset = "quality";
+        migrated.maxBitrateKbps = 120_000;
+        migrated.requestedBitrateKbps = 120_000;
+        migrated.resolution = "native";
+      }
+      migrated.qualityTuningVersion = 3;
     }
 
     return { ...WEB_DEFAULTS, ...migrated };
