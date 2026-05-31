@@ -102,10 +102,13 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
     setError("");
     try {
       const videoConstraints: MediaTrackConstraints & { cursor?: string } = {
-        // No `min` framerate: a hard floor makes the capturer duplicate frames
-        // when the screen is static, wasting bitrate on redundant data. Letting
-        // it idle frees that bandwidth for actual motion and keeps FPS stable.
-        frameRate: { ideal: settings.targetFps, max: settings.targetFps },
+        // Demande explicite d'un PLANCHER de framerate. Sans `min`, Chromium
+        // auto-throttle la capture d'écran qu'il juge "calme" et tombe à ~20 fps
+        // même GPU au repos — ce qui donne une navigation saccadée. Un `min` élevé
+        // force le capturer à tenir la cadence en continu. Le coût (frames
+        // dupliquées sur écran figé) est négligeable : l'encodeur les compresse
+        // quasi à zéro, et la fluidité ressentie prime pour du contrôle distant.
+        frameRate: { min: Math.min(settings.targetFps, 30), ideal: settings.targetFps, max: settings.targetFps },
         cursor: "always",
         resizeMode: "none",
       };
