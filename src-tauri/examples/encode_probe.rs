@@ -66,6 +66,17 @@ fn main() {
     let out_path = "native_capture.h264";
     let mut file = std::fs::File::create(out_path).expect("création fichier .h264");
 
+    // En-tête SPS/PPS : Media Foundation le range hors du flux des frames. Sans
+    // lui en tête de fichier, aucun lecteur ne peut décoder (d'où "illisible").
+    match enc.sequence_header() {
+        Ok(hdr) if !hdr.is_empty() => {
+            file.write_all(&hdr).expect("écriture en-tête");
+            println!("[encode_probe] en-tête SPS/PPS écrit : {} octets", hdr.len());
+        }
+        Ok(_) => println!("[encode_probe] ⚠ en-tête SPS/PPS vide (inclus dans le flux ?)"),
+        Err(e) => eprintln!("[encode_probe] en-tête err: {e}"),
+    }
+
     println!("[encode_probe] départ dans 3 s — mets une vidéo en mouvement…");
     std::thread::sleep(Duration::from_secs(3));
     let _ = dup.acquire(0); // vide la frame de warmup
