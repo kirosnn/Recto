@@ -3,6 +3,7 @@ import { vi, beforeEach } from "vitest";
 // Mock Tauri API (not available in jsdom)
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
+  isTauri: vi.fn(() => false),
 }));
 
 // Global registry so loopback can link the two PeerConnections
