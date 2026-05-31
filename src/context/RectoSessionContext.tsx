@@ -100,6 +100,11 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
   const start = useCallback(async () => {
     setStatus("selecting");
     setError("");
+    if (settings.engine === "velocity") {
+      setError("Velocity est testable dans les réglages, mais son transport WebRTC natif n'est pas encore connecté.");
+      setStatus("error");
+      return;
+    }
     try {
       const videoConstraints: MediaTrackConstraints & { cursor?: string } = {
         // Demande explicite d'un PLANCHER de framerate. Sans `min`, Chromium
@@ -222,7 +227,7 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
       if ((e as Error).name !== "NotAllowedError") { setError((e as Error).message || "Erreur"); setStatus("error"); }
       else setStatus("idle");
     }
-  }, [stop]);
+  }, [settings, stop, update, user]);
 
   const copyCode = useCallback(async () => {
     if (!code) return;
