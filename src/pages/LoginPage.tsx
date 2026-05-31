@@ -7,6 +7,13 @@ import DiscordIcon from "../components/DiscordIcon";
 import { open } from "@tauri-apps/plugin-shell";
 import { isTauri } from "@tauri-apps/api/core";
 
+function getDesktopRedirectTo() {
+  if (window.location.port === "5173") return "recto-dev-recto://auth/callback";
+  if (window.location.port === "5174") return "recto-dev-verso://auth/callback";
+
+  return (import.meta.env.VITE_DESKTOP_AUTH_CALLBACK_URL as string | undefined) ?? "recto://auth/callback";
+}
+
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
@@ -20,9 +27,8 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const runningInTauri = isTauri();
-      const desktopCallback = import.meta.env.VITE_DESKTOP_AUTH_CALLBACK_URL as string | undefined;
       const redirectTo = runningInTauri
-        ? desktopCallback ?? "https://kirossenrecto.vercel.app/auth/desktop-callback"
+        ? getDesktopRedirectTo()
         : `${window.location.origin}/auth/callback`;
 
       const { data, error } = await supabase.auth.signInWithOAuth({
