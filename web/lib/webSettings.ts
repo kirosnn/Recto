@@ -6,11 +6,13 @@ import {
   type Codec,
   type Resolution,
   type DisplayMode,
+  type StreamEngine,
   PRESETS,
 } from "../../src/lib/settings";
 
 export interface WebClientSettings {
   qualityTuningVersion: number;
+  engine: StreamEngine;
   preset: QualityPreset;
   maxBitrateKbps: number | null;
   targetFps: number;
@@ -30,7 +32,8 @@ export interface WebClientSettings {
 }
 
 export const WEB_DEFAULTS: WebClientSettings = {
-  qualityTuningVersion: 3,
+  qualityTuningVersion: 4,
+  engine: "browser",
   preset: "quality",
   maxBitrateKbps: 120_000,
   targetFps: 60,
@@ -78,6 +81,11 @@ function load(): WebClientSettings {
         migrated.resolution = "native";
       }
       migrated.qualityTuningVersion = 3;
+    }
+
+    if ((stored.qualityTuningVersion ?? 0) < 4) {
+      migrated.engine = "browser";
+      migrated.qualityTuningVersion = 4;
     }
 
     return { ...WEB_DEFAULTS, ...migrated };

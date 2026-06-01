@@ -1,6 +1,12 @@
 import { createContext, useContext, useRef, useState, useCallback, useEffect } from "react";
 import { RectoConnection, logWebRTCDiagnostics } from "../lib/webrtc";
-import { endSession } from "../lib/signaling";
+import {
+  createSession,
+  endSession,
+  fetchSession,
+  fetchSessionAnswer,
+  subscribeToSession,
+} from "../lib/signaling";
 import { identityFromUser } from "../lib/identity";
 import { useAuth } from "./useAuth";
 import { useSettings } from "./SettingsContext";
@@ -60,6 +66,8 @@ interface DisplayInfo {
   primary: boolean;
 }
 
+type VelocityStartResult = { offer: RTCSessionDescriptionInit };
+
 const RectoSessionCtx = createContext<Ctx>({
   status: "idle", code: "", duration: 0, error: "", copied: false, peer: null,
   lastInputRef: { current: { summary: "", count: 0 } },
@@ -83,6 +91,8 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const diagRef = useRef<ReturnType<typeof setInterval> | null>(null); // TEMP DIAGNOSTIC
   const lastInputRef = useRef<InputDebug>({ summary: "", count: 0 });
+  const velocitySessionRef = useRef(false);
+  const velocityChannelRef = useRef<ReturnType<typeof subscribeToSession> | null>(null);
 
   // Re-apply encoding parameters whenever settings change mid-session
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -91,6 +101,12 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
   const stop = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     if (diagRef.current) { clearInterval(diagRef.current); diagRef.current = null; } // TEMP DIAGNOSTIC
+    velocityChannelRef.current?.unsubscribe();
+    velocityChannelRef.current = null;
+    if (velocitySessionRef.current) {
+      invoke("velocity_stop").catch(() => {});
+      velocitySessionRef.current = false;
+    }
     if (code) endSession(code).catch(() => {});
     conn.current?.stop(); conn.current = null;
     setStatus("idle"); setCode(""); setDuration(0); setError(""); setPeer(null);
@@ -101,16 +117,39 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
     setStatus("selecting");
     setError("");
     try {
+      if (settings.engine === "velocity") {
+        const res = await invoke<VelocityStartResult>("velocity_start", {
+          settings: {
+            targetFps: settings.velocityTargetFps,
+            audioEnabled: settings.velocityAudioEnabled,
+          },
+        });
+        velocitySessionRef.current = true;
+        const sessionCode = await createSession(res.offer);
+        setCode(sessionCode);
+        setStatus("waiting");
+        const session = await fetchSession(sessionCode);
+
+        const applyAnswer = async (answer: RTCSessionDescriptionInit) => {
+          await invoke("velocity_accept_answer", { answer });
+          setStatus("connected");
+          if (!timerRef.current) {
+            timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
+          }
+        };
+
+        velocityChannelRef.current = subscribeToSession(session.id, async (update) => {
+          if (update.answer) await applyAnswer(update.answer as RTCSessionDescriptionInit);
+        });
+
+        const existing = await fetchSessionAnswer(session.id);
+        if (existing) await applyAnswer(existing);
+        return;
+      }
+
       const videoConstraints: MediaTrackConstraints & { cursor?: string } = {
-        // Demande explicite d'un PLANCHER de framerate. Sans `min`, Chromium
-        // auto-throttle la capture d'écran qu'il juge "calme" et tombe à ~20 fps
-        // même GPU au repos — ce qui donne une navigation saccadée. Un `min` élevé
-        // force le capturer à tenir la cadence en continu. Le coût (frames
-        // dupliquées sur écran figé) est négligeable : l'encodeur les compresse
-        // quasi à zéro, et la fluidité ressentie prime pour du contrôle distant.
-        frameRate: { min: Math.min(settings.targetFps, 30), ideal: settings.targetFps, max: settings.targetFps },
+        frameRate: { ideal: settings.targetFps, max: settings.targetFps },
         cursor: "always",
-        resizeMode: "none",
       };
       if (settings.resolution !== "native") {
         const resMap: Record<string, number> = { "1080p": 1080, "1440p": 1440, "4K": 2160 };
@@ -222,7 +261,7 @@ export function RectoSessionProvider({ children }: { children: React.ReactNode }
       if ((e as Error).name !== "NotAllowedError") { setError((e as Error).message || "Erreur"); setStatus("error"); }
       else setStatus("idle");
     }
-  }, [stop]);
+  }, [settings, stop, update, user]);
 
   const copyCode = useCallback(async () => {
     if (!code) return;

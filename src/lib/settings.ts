@@ -3,6 +3,22 @@ export type QualityPreset = "quality" | "balanced" | "performance" | "custom";
 export type Resolution = "native" | "1080p" | "1440p" | "4K";
 export type DisplayMode = "contain" | "cover";
 
+export type StreamEngine = "browser" | "velocity";
+
+export const ENGINE_LABELS: Record<StreamEngine, string> = {
+  browser: "Navigateur",
+  velocity: "Velocity",
+};
+
+export const ENGINE_INFO: Record<StreamEngine, string> = {
+  browser:
+    "Moteur compatible : capture et encodage via le navigateur. Fonctionne partout, qualité limitée par WebRTC.",
+  velocity:
+    "Moteur natif (expérimental) : capture DXGI + encodeur matériel + audio Opus. 60 fps, meilleure qualité. App de bureau uniquement.",
+};
+
+export type VelocityResolution = "native" | "1080p";
+
 // Bitrate steps in Mbps — each maps to kbps = value * 1000, last = null (unlimited)
 export const BITRATE_STEPS_MBPS = [8, 12, 20, 35, 50, 80, 120, 160] as const;
 
@@ -25,6 +41,7 @@ export function bitrateLabel(kbps: number | null): string {
 
 export interface StreamSettings {
   qualityTuningVersion: number;
+  engine: StreamEngine;
   preset: QualityPreset;
   maxBitrateKbps: number | null; // null = unlimited
   targetFps: number;
@@ -39,6 +56,10 @@ export interface StreamSettings {
   requestedBitrateKbps: number | null;
   requestedFps: 30 | 60;
   requestedCodec: Codec;
+  velocityTargetFps: 30 | 60;
+  velocityResolution: VelocityResolution;
+  velocityAudioEnabled: boolean;
+  velocityMaxBitrateMbps: number | null;
 }
 
 type PresetValues = Pick<StreamSettings, "maxBitrateKbps" | "targetFps" | "codec">;
@@ -50,7 +71,8 @@ export const PRESETS: Record<Exclude<QualityPreset, "custom">, PresetValues> = {
 };
 
 export const DEFAULTS: StreamSettings = {
-  qualityTuningVersion: 3,
+  qualityTuningVersion: 4,
+  engine: "browser",
   preset: "quality",
   maxBitrateKbps: 120_000,
   targetFps: 60,
@@ -65,6 +87,10 @@ export const DEFAULTS: StreamSettings = {
   requestedBitrateKbps: 120_000,
   requestedFps: 60,
   requestedCodec: "auto",
+  velocityTargetFps: 60,
+  velocityResolution: "native",
+  velocityAudioEnabled: true,
+  velocityMaxBitrateMbps: null,
 };
 
 const STORAGE_KEY = "windirector_settings";
@@ -96,6 +122,11 @@ export function loadSettings(): StreamSettings {
           migrated.resolution = "native";
         }
         migrated.qualityTuningVersion = 3;
+      }
+
+      if ((stored.qualityTuningVersion ?? 0) < 4) {
+        if (migrated.engine === undefined) migrated.engine = "browser";
+        migrated.qualityTuningVersion = 4;
       }
 
       return { ...DEFAULTS, ...migrated };

@@ -433,6 +433,8 @@ export class VersoConnection {
               targetFps: data.targetFps ?? 60,
               codec: data.codec ?? "auto",
             });
+          } else if (data.type === "velocityDiag") {
+            console.info("[VELOCITY]", data.event, data.payload);
           }
         } catch {}
       };
@@ -513,7 +515,8 @@ export class VersoConnection {
       if (!caps) continue;
 
       const all = caps.codecs;
-      const h264 = all.filter((c) => c.mimeType === "video/H264");
+      const h264hw = all.filter((c) => c.mimeType === "video/H264" && isHwFriendlyH264(c));
+      const h264sw = all.filter((c) => c.mimeType === "video/H264" && !isHwFriendlyH264(c));
       const h265 = all.filter((c) => c.mimeType === "video/H265");
       const av1 = all.filter((c) => c.mimeType === "video/AV1");
       const vp9 = all.filter((c) => c.mimeType === "video/VP9");
@@ -522,19 +525,19 @@ export class VersoConnection {
       let sorted: typeof all;
       switch (codec) {
         case "H264":
-          sorted = [...h264, ...h265, ...av1, ...vp9, ...rest];
+          sorted = [...h264hw, ...h264sw, ...h265, ...av1, ...vp9, ...rest];
           break;
         case "H265":
-          sorted = [...h265, ...h264, ...av1, ...vp9, ...rest];
+          sorted = [...h265, ...h264hw, ...h264sw, ...av1, ...vp9, ...rest];
           break;
         case "AV1":
-          sorted = [...av1, ...h265, ...h264, ...vp9, ...rest];
+          sorted = [...av1, ...h265, ...h264hw, ...h264sw, ...vp9, ...rest];
           break;
         case "VP9":
-          sorted = [...vp9, ...h265, ...h264, ...av1, ...rest];
+          sorted = [...vp9, ...h265, ...h264hw, ...h264sw, ...av1, ...rest];
           break;
         default:
-          sorted = [...h264, ...h265, ...av1, ...vp9, ...rest];
+          sorted = [...h264hw, ...h264sw, ...h265, ...av1, ...vp9, ...rest];
       }
 
       try { transceiver.setCodecPreferences(sorted.filter(Boolean)); } catch {}
